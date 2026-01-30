@@ -1,0 +1,567 @@
+// Valliance Resource Management - Database Schema
+// Version: 1.0.0
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ============== PEOPLE ==============
+
+model Person {
+  id                  String            @id @default(uuid())
+  name                String
+  email               String            @unique
+  type                PersonType
+  status              PersonStatus      @default(ACTIVE)
+  roleId              String
+  role                Role              @relation(fields: [roleId], references: [id])
+  departmentId        String?
+  department          Department?       @relation(fields: [departmentId], references: [id])
+  costRateCents       Int               // Stored in pence/cents for precision
+  costRateCurrency    String            @default("GBP")
+  defaultHoursPerWeek Decimal           @default(40)
+  workingDays         Int[]             @default([1, 2, 3, 4, 5]) // 1=Mon, 7=Sun
+  seniority           Seniority
+  utilisationTarget   Decimal           @default(0.80) // 80% default, configurable
+  startDate           DateTime
+  endDate             DateTime?
+  notes               String?
+
+  // Relations
+  user                User?             @relation("UserPerson")
+  practices           PracticeMember[]
+  skills              PersonSkill[]
+  allocations         Allocation[]
+  timeEntries         TimeEntry[]
+  projectRoles        ProjectRoleAssignment[]
+  valuePartnerProjects Project[]        @relation("ValuePartner")
+  approvedTimeEntries TimeEntry[]       @relation("Approver")
+
+  createdAt           DateTime          @default(now())
+  updatedAt           DateTime          @updatedAt
+  createdBy           String?
+  updatedBy           String?
+
+  @@index([status])
+  @@index([type])
+  @@index([roleId])
+}
+
+enum PersonType {
+  EMPLOYEE
+  CONTRACTOR
+}
+
+enum PersonStatus {
+  ACTIVE
+  BENCH
+  OFFBOARDED
+}
+
+enum Seniority {
+  JUNIOR
+  MID
+  SENIOR
+  PRINCIPAL
+  PARTNER
+}
+
+model Role {
+  id                  String            @id @default(uuid())
+  name                String            @unique
+  description         String?
+  defaultCostRateCents Int?
+  isBillable          Boolean           @default(true)
+
+  people              Person[]
+  projectRoles        ProjectRole[]
+  allocations         Allocation[]
+  tasks               Task[]
+
+  createdAt           DateTime          @default(now())
+  updatedAt           DateTime          @updatedAt
+}
+
+model Department {
+  id                  String            @id @default(uuid())
+  name                String            @unique
+  description         String?
+  managerId           String?
+
+  people              Person[]
+
+  createdAt           DateTime          @default(now())
+  updatedAt           DateTime          @updatedAt
+}
+
+model Practice {
+  id                  String            @id @default(uuid())
+  name                String            @unique  // "Agentic", "Palantir", "Sierra"
+  description         String?
+  leadId              String?
+
+  members             PracticeMember[]
+  primaryProjects     Project[]         @relation("PrimaryPractice")
+  projects            ProjectPractice[]
+
+  createdAt           DateTime          @default(now())
+  updatedAt           DateTime          @updatedAt
+}
+
+model PracticeMember {
+  id                  String            @id @default(uuid())
+  personId            String
+  person              Person            @relation(fields: [personId], references: [id])
+  practiceId          String
+  practice            Practice          @relation(fields: [practiceId], references: [id])
+  isPrimary           Boolean           @default(false)
+
+  @@unique([personId, practiceId])
+}
+
+// ============== SKILLS ==============
+
+model Skill {
+  id                  String            @id @default(uuid())
+  name                String            @unique
+  category            SkillCategory
+  description         String?
+
+  personSkills        PersonSkill[]
+  taskSkills          TaskSkill[]
+
+  createdAt           DateTime          @default(now())
+  updatedAt           DateTime          @updatedAt
+}
+
+enum SkillCategory {
+  PLATFORM
+  PROGRAMMING
+  FRAMEWORK
+  DOMAIN
+  METHODOLOGY
+  SOFT_SKILL
+}
+
+model PersonSkill {
+  id                  String            @id @default(uuid())
+  personId            String
+  person              Person            @relation(fields: [personId], references: [id])
+  skillId             String
+  skill               Skill             @relation(fields: [skillId], references: [id])
+  proficiency         Proficiency
+  yearsExperience     Decimal?
+  lastUsed            DateTime?
+
+  @@unique([personId, skillId])
+}
+
+enum Proficiency {
+  LEARNING
+  COMPETENT
+  PROFICIENT
+  EXPERT
+}
+
+// ============== CLIENTS & PROJECTS ==============
+
+model Client {
+  id                  String            @id @default(uuid())
+  name                String            @unique
+  industry            String?
+  primaryContact      String?
+  contactEmail        String?
+  notes               String?
+
+  projects            Project[]
+
+  createdAt           DateTime          @default(now())
+  updatedAt           DateTime          @updatedAt
+}
+
+model Project {
+  id                  String            @id @default(uuid())
+  name                String
+  code                String            @unique
+  clientId            String
+  client              Client            @relation(fields: [clientId], references: [id])
+  primaryPracticeId   String
+  primaryPractice     Practice          @relation("PrimaryPractice", fields: [primaryPracticeId], references: [id])
+  practices           ProjectPractice[]
+  valuePartnerId      String
+  valuePartner        Person            @relation("ValuePartner", fields: [valuePartnerId], references: [id])
+  status              ProjectStatus     @default(PROSPECT)
+
+  // Commercial Model
+  commercialModel     CommercialModel
+  estimatedValueCents BigInt?           // Value created for client
+  valueSharePct       Decimal?          // Valliance's percentage (e.g., 0.15 for 15%)
+  agreedFeeCents      BigInt?           // For fixed-price
+  contingencyPct      Decimal?          @default(0.20)
+  currency            String            @default("GBP")
+
+  // Timing
+  startDate           DateTime
+  endDate             DateTime?
+
+  // Hierarchy
+  projectType         ProjectType
+  parentProjectId     String?
+  parentProject       Project?          @relation("ProjectHierarchy", fields: [parentProjectId], references: [id])
+  childProjects       Project[]         @relation("ProjectHierarchy")
+
+  // Team Model
+  teamModel           TeamModel         @default(THREE_IN_BOX)
+
+  // Relations
+  phases              Phase[]
+  allocations         Allocation[]
+  timeEntries         TimeEntry[]
+  projectRoles        ProjectRole[]
+  tags                ProjectTag[]
+
+  notes               String?
+
+  createdAt           DateTime          @default(now())
+  updatedAt           DateTime          @updatedAt
+  createdBy           String?
+  updatedBy           String?
+
+  @@index([status])
+  @@index([clientId])
+  @@index([primaryPracticeId])
+  @@index([valuePartnerId])
+}
+
+model ProjectPractice {
+  id                  String            @id @default(uuid())
+  projectId           String
+  project             Project           @relation(fields: [projectId], references: [id])
+  practiceId          String
+  practice            Practice          @relation(fields: [practiceId], references: [id])
+
+  @@unique([projectId, practiceId])
+}
+
+enum ProjectStatus {
+  PROSPECT
+  DISCOVERY
+  CONFIRMED
+  ACTIVE
+  ON_HOLD
+  COMPLETED
+  CANCELLED
+}
+
+enum CommercialModel {
+  VALUE_SHARE
+  FIXED_PRICE
+  HYBRID
+}
+
+enum ProjectType {
+  BOOTCAMP
+  PILOT
+  USE_CASE_ROLLOUT
+}
+
+enum TeamModel {
+  THREE_IN_BOX
+  FLEXIBLE
+}
+
+model ProjectTag {
+  id                  String            @id @default(uuid())
+  projectId           String
+  project             Project           @relation(fields: [projectId], references: [id])
+  tag                 String
+
+  @@unique([projectId, tag])
+  @@index([tag])
+}
+
+// ============== PHASES & TASKS ==============
+
+model Phase {
+  id                  String            @id @default(uuid())
+  projectId           String
+  project             Project           @relation(fields: [projectId], references: [id])
+  name                String
+  phaseType           PhaseType
+  status              PhaseStatus       @default(NOT_STARTED)
+  startDate           DateTime
+  endDate             DateTime?
+
+  // Phase-Level Budget
+  estimatedHours      Decimal?
+  estimatedCostCents  BigInt?           // Phase budget
+  budgetAlertPct      Decimal?          @default(0.80) // Alert at 80%
+
+  sortOrder           Int
+
+  tasks               Task[]
+  allocations         Allocation[]
+  timeEntries         TimeEntry[]
+
+  createdAt           DateTime          @default(now())
+  updatedAt           DateTime          @updatedAt
+
+  @@index([projectId])
+}
+
+enum PhaseType {
+  DISCOVERY
+  DESIGN
+  BUILD
+  TEST
+  DEPLOY
+  HYPERCARE
+  CUSTOM
+}
+
+enum PhaseStatus {
+  NOT_STARTED
+  IN_PROGRESS
+  COMPLETED
+  BLOCKED
+}
+
+model Task {
+  id                  String            @id @default(uuid())
+  phaseId             String
+  phase               Phase             @relation(fields: [phaseId], references: [id])
+  name                String
+  description         String?
+  estimatedHours      Decimal?
+  status              TaskStatus        @default(TODO)
+  priority            TaskPriority      @default(MEDIUM)
+  requiredRoleId      String?
+  requiredRole        Role?             @relation(fields: [requiredRoleId], references: [id])
+  sortOrder           Int
+
+  requiredSkills      TaskSkill[]
+  allocations         Allocation[]
+  timeEntries         TimeEntry[]
+
+  createdAt           DateTime          @default(now())
+  updatedAt           DateTime          @updatedAt
+
+  @@index([phaseId])
+}
+
+model TaskSkill {
+  id                  String            @id @default(uuid())
+  taskId              String
+  task                Task              @relation(fields: [taskId], references: [id])
+  skillId             String
+  skill               Skill             @relation(fields: [skillId], references: [id])
+
+  @@unique([taskId, skillId])
+}
+
+enum TaskStatus {
+  TODO
+  IN_PROGRESS
+  DONE
+  BLOCKED
+}
+
+enum TaskPriority {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+// ============== PROJECT ROLES (3-in-the-box) ==============
+
+model ProjectRole {
+  id                  String            @id @default(uuid())
+  projectId           String
+  project             Project           @relation(fields: [projectId], references: [id])
+  roleId              String
+  role                Role              @relation(fields: [roleId], references: [id])
+  requiredCount       Int               @default(1)
+  isRequired          Boolean           @default(true) // For 3-in-box compliance
+
+  assignments         ProjectRoleAssignment[]
+
+  @@unique([projectId, roleId])
+}
+
+model ProjectRoleAssignment {
+  id                  String            @id @default(uuid())
+  projectRoleId       String
+  projectRole         ProjectRole       @relation(fields: [projectRoleId], references: [id])
+  personId            String
+  person              Person            @relation(fields: [personId], references: [id])
+
+  @@unique([projectRoleId, personId])
+}
+
+// ============== ALLOCATIONS ==============
+
+model Allocation {
+  id                  String            @id @default(uuid())
+  personId            String
+  person              Person            @relation(fields: [personId], references: [id])
+  projectId           String
+  project             Project           @relation(fields: [projectId], references: [id])
+  phaseId             String?
+  phase               Phase?            @relation(fields: [phaseId], references: [id])
+  taskId              String?
+  task                Task?             @relation(fields: [taskId], references: [id])
+
+  startDate           DateTime
+  endDate             DateTime
+  hoursPerDay         Decimal
+
+  allocationType      AllocationType
+  status              AllocationStatus  @default(TENTATIVE)
+
+  roleId              String?           // Role for this allocation (may differ from person default)
+  role                Role?             @relation(fields: [roleId], references: [id])
+
+  // Snapshot at creation for historical accuracy
+  costRateCentsSnapshot Int
+
+  notes               String?
+
+  timeEntries         TimeEntry[]
+
+  createdAt           DateTime          @default(now())
+  updatedAt           DateTime          @updatedAt
+  createdBy           String?
+  updatedBy           String?
+
+  @@index([personId])
+  @@index([projectId])
+  @@index([phaseId])
+  @@index([startDate, endDate])
+  @@index([status])
+}
+
+enum AllocationType {
+  BILLABLE
+  NON_BILLABLE
+  INTERNAL
+  BENCH
+}
+
+enum AllocationStatus {
+  TENTATIVE
+  CONFIRMED
+  COMPLETED
+}
+
+// ============== TIME TRACKING ==============
+
+model TimeEntry {
+  id                  String            @id @default(uuid())
+  personId            String
+  person              Person            @relation(fields: [personId], references: [id])
+  allocationId        String?
+  allocation          Allocation?       @relation(fields: [allocationId], references: [id])
+  projectId           String?
+  project             Project?          @relation(fields: [projectId], references: [id])
+  phaseId             String?
+  phase               Phase?            @relation(fields: [phaseId], references: [id])
+  taskId              String?
+  task                Task?             @relation(fields: [taskId], references: [id])
+
+  date                DateTime          @db.Date
+  hours               Decimal
+  entryType           TimeEntryType
+
+  description         String?
+
+  // Approval workflow
+  status              TimeEntryStatus   @default(DRAFT)
+  approvedById        String?
+  approvedBy          Person?           @relation("Approver", fields: [approvedById], references: [id])
+  approvedAt          DateTime?
+  rejectionReason     String?
+  lockedAt            DateTime?         // For ISO compliance
+
+  // Audit trail
+  createdAt           DateTime          @default(now())
+  updatedAt           DateTime          @updatedAt
+  createdBy           String
+  updatedBy           String?
+
+  @@index([personId])
+  @@index([date])
+  @@index([projectId])
+  @@index([phaseId])
+  @@index([status])
+}
+
+enum TimeEntryType {
+  BILLABLE
+  NON_BILLABLE
+  INTERNAL
+  BENCH
+  LEAVE
+}
+
+enum TimeEntryStatus {
+  DRAFT
+  SUBMITTED
+  APPROVED
+  REJECTED
+  LOCKED
+}
+
+// ============== USERS & AUTH ==============
+
+model User {
+  id                  String            @id @default(uuid())
+  email               String            @unique
+  passwordHash        String?           // Null if SSO-only
+  personId            String?           @unique
+  person              Person?           @relation("UserPerson", fields: [personId], references: [id])
+  role                UserRole          @default(TEAM_MEMBER)
+  isActive            Boolean           @default(true)
+
+  lastLoginAt         DateTime?
+
+  createdAt           DateTime          @default(now())
+  updatedAt           DateTime          @updatedAt
+
+  @@index([role])
+}
+
+enum UserRole {
+  PARTNER
+  OPS_LEAD
+  PRACTICE_LEAD
+  PROJECT_MANAGER
+  TEAM_MEMBER
+  CONTRACTOR
+  READ_ONLY
+}
+
+// ============== AUDIT LOG ==============
+
+model AuditLog {
+  id                  String            @id @default(uuid())
+  entityType          String            // "Project", "Allocation", "TimeEntry", etc.
+  entityId            String
+  action              String            // "CREATE", "UPDATE", "DELETE", "APPROVE", "REJECT", "LOCK"
+  changes             Json              // { field: { old: x, new: y } }
+  userId              String
+  userEmail           String
+  ipAddress           String?
+  userAgent           String?
+
+  createdAt           DateTime          @default(now())
+
+  @@index([entityType, entityId])
+  @@index([userId])
+  @@index([createdAt])
+}

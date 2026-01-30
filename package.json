@@ -1,0 +1,38 @@
+{
+  "name": "valliance-resource-management",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Value-based resource management system for Valliance",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "turbo run dev",
+    "build": "turbo run build",
+    "test": "turbo run test",
+    "lint": "turbo run lint",
+    "format": "prettier --write \"**/*.{ts,tsx,js,jsx,json,md}\"",
+    "clean": "turbo run clean && rm -rf node_modules",
+    "db:migrate": "npx dotenv-cli -e .env -- yarn workspace @vrm/database prisma migrate dev",
+    "db:generate": "npx dotenv-cli -e .env -- yarn workspace @vrm/database prisma generate",
+    "db:seed": "npx dotenv-cli -e .env -- yarn workspace @vrm/database prisma db seed",
+    "db:studio": "npx dotenv-cli -e .env -- yarn workspace @vrm/database prisma studio",
+    "docker:up": "docker-compose -f infrastructure/docker/docker-compose.yml up -d",
+    "docker:down": "docker-compose -f infrastructure/docker/docker-compose.yml down",
+    "docker:logs": "docker-compose -f infrastructure/docker/docker-compose.yml logs -f"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.0",
+    "dotenv-cli": "^11.0.0",
+    "prettier": "^3.2.4",
+    "tsconfig-paths": "^4.2.0",
+    "turbo": "^1.12.0",
+    "typescript": "^5.3.3"
+  },
+  "packageManager": "yarn@4.1.0",
+  "engines": {
+    "node": ">=20.0.0",
+    "yarn": ">=4.0.0"
+  }
+}
