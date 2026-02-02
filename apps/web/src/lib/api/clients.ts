@@ -1,4 +1,4 @@
-import { apiClient, API_SERVICES } from './api-client';
+import { apiClient, SERVICES } from '../api-client';
 
 export interface Client {
   id: string;
@@ -38,26 +38,26 @@ export interface UpdateClientDto {
 
 export const clientsService = {
   async getAll(): Promise<Client[]> {
-    const response = await apiClient.get(`${API_SERVICES.PROJECT}/clients`);
+    const response = await apiClient.get(`${SERVICES.PROJECTS}/clients`);
     return response.data;
   },
 
   async getById(id: string): Promise<Client> {
-    const response = await apiClient.get(`${API_SERVICES.PROJECT}/clients/${id}`);
+    const response = await apiClient.get(`${SERVICES.PROJECTS}/clients/${id}`);
     return response.data;
   },
 
   async create(data: CreateClientDto): Promise<Client> {
-    const response = await apiClient.post(`${API_SERVICES.PROJECT}/clients`, data);
+    const response = await apiClient.post(`${SERVICES.PROJECTS}/clients`, data);
     return response.data;
   },
 
   async update(id: string, data: UpdateClientDto): Promise<Client> {
-    const response = await apiClient.put(`${API_SERVICES.PROJECT}/clients/${id}`, data);
+    const response = await apiClient.put(`${SERVICES.PROJECTS}/clients/${id}`, data);
     return response.data;
   },
 
   async delete(id: string): Promise<void> {
-    await apiClient.delete(`${API_SERVICES.PROJECT}/clients/${id}`);
+    await apiClient.delete(`${SERVICES.PROJECTS}/clients/${id}`);
   },
 };

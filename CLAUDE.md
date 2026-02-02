@@ -1,5 +1,7 @@
 # CLAUDE.md — Valliance Resource Management System
 
+**IMPORTANT** Use yarn as package manager
+
 ## Project Overview
 
 ### Purpose

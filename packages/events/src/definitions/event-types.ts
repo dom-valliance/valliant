@@ -105,9 +105,29 @@ export interface PhaseBudgetWarningEvent extends BaseEvent {
   };
 }
 
+export interface AllocationUpdatedEvent extends BaseEvent {
+  type: EventType.ALLOCATION_UPDATED;
+  payload: {
+    allocationId: string;
+    personId: string;
+    projectId: string;
+  };
+}
+
+export interface AllocationDeletedEvent extends BaseEvent {
+  type: EventType.ALLOCATION_DELETED;
+  payload: {
+    allocationId: string;
+    personId: string;
+    projectId: string;
+  };
+}
+
 export type VRMEvent =
   | PersonCreatedEvent
   | ProjectCreatedEvent
   | AllocationCreatedEvent
+  | AllocationUpdatedEvent
+  | AllocationDeletedEvent
   | TimeEntrySubmittedEvent
   | PhaseBudgetWarningEvent;

@@ -1,13 +1,13 @@
 import { Injectable } from '@nestjs/common';
-import { prisma } from '@vrm/database';
+import { prisma, TaskStatus, TaskPriority } from '@vrm/database';
 
 interface CreateTaskDto {
   phaseId: string;
   name: string;
   description?: string;
   estimatedHours?: number;
-  status?: string;
-  priority?: string;
+  status?: TaskStatus;
+  priority?: TaskPriority;
   requiredRoleId?: string;
   sortOrder: number;
 }
@@ -16,8 +16,8 @@ interface UpdateTaskDto {
   name?: string;
   description?: string;
   estimatedHours?: number;
-  status?: string;
-  priority?: string;
+  status?: TaskStatus;
+  priority?: TaskPriority;
   requiredRoleId?: string;
   sortOrder?: number;
 }
@@ -102,8 +102,8 @@ export class TasksService {
     return prisma.task.create({
       data: {
         ...data,
-        status: data.status || 'TODO',
-        priority: data.priority || 'MEDIUM',
+        status: data.status || TaskStatus.TODO,
+        priority: data.priority || TaskPriority.MEDIUM,
       },
       include: {
         phase: {
@@ -125,9 +125,17 @@ export class TasksService {
   }
 
   async update(id: string, data: UpdateTaskDto) {
+    const { requiredRoleId, ...rest } = data;
     return prisma.task.update({
       where: { id },
-      data,
+      data: {
+        ...rest,
+        ...(requiredRoleId !== undefined && {
+          requiredRole: requiredRoleId
+            ? { connect: { id: requiredRoleId } }
+            : { disconnect: true },
+        }),
+      },
       include: {
         phase: {
           select: {

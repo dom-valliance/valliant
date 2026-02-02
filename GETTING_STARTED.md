@@ -50,6 +50,9 @@ docker ps
 # Generate Prisma client
 yarn db:generate
 
+# Run database push
+yarn db:push
+
 # Run database migrations
 yarn db:migrate
 

@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { prisma } from '@vrm/database';
+import { prisma, Prisma } from '@vrm/database';
 import { CreatePersonDto } from '@vrm/shared-types';
 import { EventPublisher, EventType } from '@vrm/events';
 
@@ -77,7 +77,7 @@ export class PeopleService {
     // Assign practices if provided
     if (practiceIds && practiceIds.length > 0) {
       await prisma.practiceMember.createMany({
-        data: practiceIds.map((practiceId, index) => ({
+        data: practiceIds.map((practiceId: string, index: number) => ({
           personId: person.id,
           practiceId,
           isPrimary: index === 0,
@@ -105,27 +105,80 @@ export class PeopleService {
   }
 
   async update(id: string, updateData: Partial<CreatePersonDto>) {
-    return prisma.person.update({
-      where: { id },
-      data: {
-        ...updateData,
-        startDate: updateData.startDate ? new Date(updateData.startDate) : undefined,
-        endDate: updateData.endDate ? new Date(updateData.endDate) : undefined,
-      },
-      include: {
-        role: true,
-        practices: {
-          include: {
-            practice: true,
+    const { practiceIds, roleId, ...rest } = updateData;
+
+    // Build the update data object
+    const data: Prisma.PersonUpdateInput = {
+      ...rest,
+      startDate: rest.startDate ? new Date(rest.startDate) : undefined,
+      endDate: rest.endDate ? new Date(rest.endDate) : undefined,
+    };
+
+    // Handle roleId using Prisma relation syntax
+    if (roleId) {
+      data.role = { connect: { id: roleId } };
+    }
+
+    // Update person and handle practices in a transaction
+    return prisma.$transaction(async (tx) => {
+      // Update practice memberships if provided
+      if (practiceIds !== undefined) {
+        // Delete existing practice memberships
+        await tx.practiceMember.deleteMany({
+          where: { personId: id },
+        });
+
+        // Create new practice memberships
+        if (practiceIds.length > 0) {
+          await tx.practiceMember.createMany({
+            data: practiceIds.map((practiceId: string, index: number) => ({
+              personId: id,
+              practiceId,
+              isPrimary: index === 0,
+            })),
+          });
+        }
+      }
+
+      // Update the person
+      return tx.person.update({
+        where: { id },
+        data,
+        include: {
+          role: true,
+          practices: {
+            include: {
+              practice: true,
+            },
           },
         },
-      },
+      });
     });
   }
 
   async delete(id: string) {
-    return prisma.person.delete({
-      where: { id },
+    // Delete related records first in a transaction
+    return prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+      // Delete practice memberships
+      await tx.practiceMember.deleteMany({
+        where: { personId: id },
+      });
+
+      // Delete person skills
+      await tx.personSkill.deleteMany({
+        where: { personId: id },
+      });
+
+      // Unlink user account (don't delete, just unlink)
+      await tx.user.updateMany({
+        where: { personId: id },
+        data: { personId: null },
+      });
+
+      // Delete the person
+      return tx.person.delete({
+        where: { id },
+      });
     });
   }
 }

@@ -1,4 +1,4 @@
-import { apiClient, API_SERVICES } from './api-client';
+import { apiClient, SERVICES } from '../api-client';
 
 export interface Project {
   id: string;
@@ -31,6 +31,7 @@ export interface Project {
   endDate?: string;
   projectType: 'BOOTCAMP' | 'PILOT' | 'USE_CASE_ROLLOUT';
   teamModel: 'THREE_IN_BOX' | 'FLEXIBLE';
+  color: string;
   phases?: any[];
   notes?: string;
   createdAt: string;
@@ -53,6 +54,7 @@ export interface CreateProjectDto {
   endDate?: string;
   projectType: string;
   teamModel?: string;
+  color?: string;
   notes?: string;
 }
 
@@ -72,31 +74,32 @@ export interface UpdateProjectDto {
   endDate?: string;
   projectType?: string;
   teamModel?: string;
+  color?: string;
   notes?: string;
 }
 
 export const projectsService = {
   async getAll(): Promise<Project[]> {
-    const response = await apiClient.get(`${API_SERVICES.PROJECT}/projects`);
+    const response = await apiClient.get(`${SERVICES.PROJECTS}/projects`);
     return response.data;
   },
 
   async getById(id: string): Promise<Project> {
-    const response = await apiClient.get(`${API_SERVICES.PROJECT}/projects/${id}`);
+    const response = await apiClient.get(`${SERVICES.PROJECTS}/projects/${id}`);
     return response.data;
   },
 
   async create(data: CreateProjectDto): Promise<Project> {
-    const response = await apiClient.post(`${API_SERVICES.PROJECT}/projects`, data);
+    const response = await apiClient.post(`${SERVICES.PROJECTS}/projects`, data);
     return response.data;
   },
 
   async update(id: string, data: UpdateProjectDto): Promise<Project> {
-    const response = await apiClient.put(`${API_SERVICES.PROJECT}/projects/${id}`, data);
+    const response = await apiClient.put(`${SERVICES.PROJECTS}/projects/${id}`, data);
     return response.data;
   },
 
   async delete(id: string): Promise<void> {
-    await apiClient.delete(`${API_SERVICES.PROJECT}/projects/${id}`);
+    await apiClient.delete(`${SERVICES.PROJECTS}/projects/${id}`);
   },
 };

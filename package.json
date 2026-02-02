@@ -8,6 +8,7 @@
     "packages/*"
   ],
   "scripts": {
+    "predev": "turbo run predev",
     "dev": "turbo run dev",
     "build": "turbo run build",
     "test": "turbo run test",
@@ -15,6 +16,7 @@
     "format": "prettier --write \"**/*.{ts,tsx,js,jsx,json,md}\"",
     "clean": "turbo run clean && rm -rf node_modules",
     "db:migrate": "npx dotenv-cli -e .env -- yarn workspace @vrm/database prisma migrate dev",
+    "db:push": "npx dotenv-cli -e .env -- yarn workspace @vrm/database prisma db push",
     "db:generate": "npx dotenv-cli -e .env -- yarn workspace @vrm/database prisma generate",
     "db:seed": "npx dotenv-cli -e .env -- yarn workspace @vrm/database prisma db seed",
     "db:studio": "npx dotenv-cli -e .env -- yarn workspace @vrm/database prisma studio",
@@ -30,7 +32,7 @@
     "turbo": "^1.12.0",
     "typescript": "^5.3.3"
   },
-  "packageManager": "yarn@4.1.0",
+  "packageManager": "yarn@4.1.0+sha512.5b7bc055cad63273dda27df1570a5d2eb4a9f03b35b394d3d55393c2a5560a17f5cef30944b11d6a48bcbcfc1c3a26d618aae77044774c529ba36cb771ad5b0f",
   "engines": {
     "node": ">=20.0.0",
     "yarn": ">=4.0.0"

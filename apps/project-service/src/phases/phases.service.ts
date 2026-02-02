@@ -1,10 +1,10 @@
 import { Injectable } from '@nestjs/common';
-import { prisma } from '@vrm/database';
+import { prisma, PhaseType, PhaseStatus } from '@vrm/database';
 
 interface CreatePhaseDto {
   projectId: string;
   name: string;
-  phaseType: string;
+  phaseType: PhaseType;
   startDate: string;
   endDate?: string;
   estimatedHours?: number;
@@ -15,8 +15,8 @@ interface CreatePhaseDto {
 
 interface UpdatePhaseDto {
   name?: string;
-  phaseType?: string;
-  status?: string;
+  phaseType?: PhaseType;
+  status?: PhaseStatus;
   startDate?: string;
   endDate?: string;
   estimatedHours?: number;

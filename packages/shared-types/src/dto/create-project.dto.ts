@@ -14,12 +14,14 @@ export enum CommercialModel {
   VALUE_SHARE = 'VALUE_SHARE',
   FIXED_PRICE = 'FIXED_PRICE',
   HYBRID = 'HYBRID',
+  INTERNAL = 'INTERNAL',
 }
 
 export enum ProjectType {
   BOOTCAMP = 'BOOTCAMP',
   PILOT = 'PILOT',
   USE_CASE_ROLLOUT = 'USE_CASE_ROLLOUT',
+  INTERNAL = 'INTERNAL',
 }
 
 export enum TeamModel {
@@ -83,6 +85,10 @@ export class CreateProjectDto {
   @IsOptional()
   @IsEnum(TeamModel)
   teamModel?: TeamModel;
+
+  @IsOptional()
+  @IsString()
+  color?: string;
 
   @IsOptional()
   @IsString()

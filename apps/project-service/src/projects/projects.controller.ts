@@ -18,7 +18,8 @@ export class ProjectsController {
 
   @Post()
   create(@Body() data: CreateProjectDto) {
-    return this.projectsService.create(data);
+    // Cast to service DTO - enum values are identical strings, just different TS types
+    return this.projectsService.create(data as Parameters<typeof this.projectsService.create>[0]);
   }
 
   @Put(':id')

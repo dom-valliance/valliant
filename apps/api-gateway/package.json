@@ -4,6 +4,7 @@
   "private": true,
   "scripts": {
     "build": "nest build",
+    "predev": "npx --yes kill-port 4000",
     "dev": "PORT=4000 nest start --watch",
     "start": "nest start",
     "start:prod": "node dist/main",

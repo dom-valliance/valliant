@@ -7,6 +7,11 @@ import { resolve } from 'path';
 // Load .env from root directory
 config({ path: resolve(__dirname, '../../../.env') });
 
+// Add BigInt serialization support
+(BigInt.prototype as any).toJSON = function () {
+  return this.toString();
+};
+
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
   app.useGlobalPipes(new ValidationPipe({ whitelist: true, transform: true }));

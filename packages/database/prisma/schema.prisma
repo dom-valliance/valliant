@@ -2,7 +2,8 @@
 // Version: 1.0.0
 
 generator client {
-  provider = "prisma-client-js"
+  provider      = "prisma-client-js"
+  binaryTargets = ["native", "debian-openssl-3.0.x"]
 }
 
 datasource db {
@@ -218,6 +219,9 @@ model Project {
   // Team Model
   teamModel           TeamModel         @default(THREE_IN_BOX)
 
+  // Display
+  color               String            @default("#3B82F6") // Hex color code for schedule display
+
   // Relations
   phases              Phase[]
   allocations         Allocation[]
@@ -262,12 +266,14 @@ enum CommercialModel {
   VALUE_SHARE
   FIXED_PRICE
   HYBRID
+  INTERNAL
 }
 
 enum ProjectType {
   BOOTCAMP
   PILOT
   USE_CASE_ROLLOUT
+  INTERNAL
 }
 
 enum TeamModel {
@@ -322,6 +328,7 @@ enum PhaseType {
   DEPLOY
   HYPERCARE
   CUSTOM
+  OPERATIONAL
 }
 
 enum PhaseStatus {
@@ -410,8 +417,8 @@ model Allocation {
   id                  String            @id @default(uuid())
   personId            String
   person              Person            @relation(fields: [personId], references: [id])
-  projectId           String
-  project             Project           @relation(fields: [projectId], references: [id])
+  projectId           String?           // Optional for LEAVE allocations
+  project             Project?          @relation(fields: [projectId], references: [id])
   phaseId             String?
   phase               Phase?            @relation(fields: [phaseId], references: [id])
   taskId              String?
@@ -451,6 +458,7 @@ enum AllocationType {
   NON_BILLABLE
   INTERNAL
   BENCH
+  LEAVE
 }
 
 enum AllocationStatus {

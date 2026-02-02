@@ -1,6 +1,8 @@
 // DTOs
 export * from './dto/create-person.dto';
 export * from './dto/create-project.dto';
+export * from './dto/create-allocation.dto';
+export * from './dto/create-time-log.dto';
 
 // Common types
 export interface PaginationParams {

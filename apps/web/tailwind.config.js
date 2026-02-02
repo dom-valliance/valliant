@@ -50,6 +50,17 @@ module.exports = {
           DEFAULT: 'hsl(var(--card))',
           foreground: 'hsl(var(--card-foreground))',
         },
+        'deep-navy': '#0D1B2A',
+        'dark-teal': '#26425A',
+        'light-blue': '#86A8CF',
+        'light-pink': '#E1CBD7',
+        'mauve': '#C38EB4',
+      },
+      backgroundImage: {
+        'gradient-dark': 'linear-gradient(180deg, #0D1B2A 0%, #1a2f4a 50%, #26425A 100%)',
+        'gradient-sidebar': 'linear-gradient(180deg, #0D1B2A 0%, #162637 100%)',
+        'gradient-card': 'linear-gradient(135deg, rgba(38,66,90,0.4) 0%, rgba(13,27,42,0.6) 100%)',
+        'gradient-accent': 'linear-gradient(135deg, #C38EB4 0%, #86A8CF 100%)',
       },
       borderRadius: {
         lg: 'var(--radius)',
