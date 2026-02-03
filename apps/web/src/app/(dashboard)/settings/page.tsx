@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { Users, Shield, Briefcase, Wrench } from 'lucide-react';
+import { Users, Shield, Briefcase, Wrench, Plug } from 'lucide-react';
 import { Card, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { useAuthStore } from '@/stores/auth-store';
 import { canManageUsers } from '@/lib/permissions';
@@ -30,6 +30,22 @@ export default function SettingsPage() {
                 </CardTitle>
                 <CardDescription>
                   Manage user accounts and assign roles
+                </CardDescription>
+              </CardHeader>
+            </Card>
+          </Link>
+        )}
+
+        {showUserManagement && (
+          <Link href="/integrations/hubspot">
+            <Card className="hover:shadow-md transition-shadow cursor-pointer h-full">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Plug className="h-5 w-5" />
+                  Integrations
+                </CardTitle>
+                <CardDescription>
+                  Manage HubSpot sync and external integrations
                 </CardDescription>
               </CardHeader>
             </Card>

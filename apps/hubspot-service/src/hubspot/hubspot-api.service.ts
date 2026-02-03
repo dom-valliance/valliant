@@ -1,0 +1,265 @@
+import { Injectable, Logger } from '@nestjs/common';
+import { Client as HubSpotClient } from '@hubspot/api-client';
+import { FilterOperatorEnum } from '@hubspot/api-client/lib/codegen/crm/deals';
+import {
+  HubSpotDeal,
+  HubSpotCompany,
+  HubSpotOwner,
+} from './hubspot.types';
+
+/**
+ * HubSpot API Service
+ * Handles all communication with HubSpot API
+ */
+@Injectable()
+export class HubSpotApiService {
+  private readonly logger = new Logger(HubSpotApiService.name);
+  private readonly hubspotClient: HubSpotClient;
+  private readonly pipelineId: string;
+  private readonly stageIds: {
+    staffingPlanning: string;
+    discovery: string;
+    execution: string;
+    rollout: string;
+    valueRealisation: string;
+    closed: string;
+  };
+
+  constructor() {
+    const apiKey = process.env.HUBSPOT_API_KEY;
+    if (!apiKey) {
+      throw new Error('HUBSPOT_API_KEY environment variable is required');
+    }
+
+    this.hubspotClient = new HubSpotClient({ accessToken: apiKey });
+
+    // Load pipeline and stage configuration
+    this.pipelineId = process.env.HUBSPOT_PIPELINE_ID || '';
+    this.stageIds = {
+      staffingPlanning: process.env.HUBSPOT_STAGE_STAFFING_PLANNING || '',
+      discovery: process.env.HUBSPOT_STAGE_DISCOVERY || '',
+      execution: process.env.HUBSPOT_STAGE_EXECUTION || '',
+      rollout: process.env.HUBSPOT_STAGE_ROLLOUT || '',
+      valueRealisation: process.env.HUBSPOT_STAGE_VALUE_REALISATION || '',
+      closed: process.env.HUBSPOT_STAGE_CLOSED || '',
+    };
+
+    this.logger.log('HubSpot API Service initialized');
+    if (!this.pipelineId) {
+      this.logger.warn('⚠️  HUBSPOT_PIPELINE_ID is not set! Use GET /sync/pipelines to discover available pipelines.');
+    } else {
+      this.logger.log(`Pipeline ID: ${this.pipelineId}`);
+    }
+  }
+
+  /**
+   * Fetch deals from custom pipeline (Staffing & Planning stage and beyond)
+   * that were created or updated since lastSyncTime
+   */
+  async fetchPipelineDeals(lastSyncTime: Date): Promise<HubSpotDeal[]> {
+    // Validate pipeline ID is configured
+    if (!this.pipelineId) {
+      throw new Error(
+        'HUBSPOT_PIPELINE_ID is not configured. Use GET /sync/pipelines to discover available pipelines and add the ID to your .env file.'
+      );
+    }
+
+    this.logger.log(
+      `Fetching deals from pipeline ${this.pipelineId} since ${lastSyncTime.toISOString()}`
+    );
+
+    try {
+      const allDeals: HubSpotDeal[] = [];
+      let after: string | undefined;
+      let hasMore = true;
+
+      // Convert date to timestamp in milliseconds
+      const lastSyncTimestamp = lastSyncTime.getTime();
+
+      // Fetch all deals in the custom pipeline that have been modified since last sync
+      while (hasMore) {
+        const searchRequest: any = {
+          filterGroups: [
+            {
+              filters: [
+                {
+                  propertyName: 'pipeline',
+                  operator: FilterOperatorEnum.Eq,
+                  value: this.pipelineId,
+                },
+                {
+                  propertyName: 'hs_lastmodifieddate',
+                  operator: FilterOperatorEnum.Gte,
+                  value: String(lastSyncTimestamp),
+                },
+              ],
+            },
+          ],
+          properties: [
+            'dealname',
+            'amount',
+            'closedate',
+            'dealstage',
+            'pipeline',
+            'hs_object_id',
+            'createdate',
+            'hs_lastmodifieddate',
+          ],
+          limit: 100,
+          sorts: ['hs_lastmodifieddate'],
+        };
+
+        // Only include 'after' when paginating
+        if (after) {
+          searchRequest.after = after;
+        }
+
+        const response = await this.hubspotClient.crm.deals.searchApi.doSearch(
+          searchRequest
+        );
+
+        // Transform results to our interface
+        const deals = response.results.map((result: any) => ({
+          id: result.id,
+          properties: result.properties,
+          associations: result.associations,
+        }));
+
+        allDeals.push(...deals);
+
+        // Check if there are more pages
+        if (response.paging?.next) {
+          after = response.paging.next.after;
+        } else {
+          hasMore = false;
+        }
+      }
+
+      this.logger.log(`Fetched ${allDeals.length} deals from HubSpot`);
+      return allDeals;
+    } catch (error: any) {
+      this.logger.error(`Error fetching deals from HubSpot: ${error.message}`, error.stack);
+      throw new Error(`Failed to fetch deals from HubSpot: ${error.message}`);
+    }
+  }
+
+  /**
+   * Fetch company details by ID
+   */
+  async fetchCompany(companyId: string): Promise<HubSpotCompany> {
+    this.logger.debug(`Fetching company ${companyId}`);
+
+    try {
+      const response = await this.hubspotClient.crm.companies.basicApi.getById(
+        companyId,
+        ['name', 'domain', 'industry', 'hs_object_id']
+      );
+
+      return {
+        id: response.id,
+        properties: response.properties as any,
+      };
+    } catch (error: any) {
+      this.logger.error(`Error fetching company ${companyId}: ${error.message}`);
+      throw new Error(`Failed to fetch company ${companyId}: ${error.message}`);
+    }
+  }
+
+  /**
+   * Fetch owner (user) details by ID
+   */
+  async fetchOwner(ownerId: string): Promise<HubSpotOwner> {
+    this.logger.debug(`Fetching owner ${ownerId}`);
+
+    try {
+      const response = await this.hubspotClient.crm.owners.ownersApi.getById(
+        parseInt(ownerId)
+      );
+
+      if (!response.email) {
+        throw new Error(`Owner ${ownerId} has no email address`);
+      }
+
+      return {
+        id: response.id,
+        email: response.email,
+        firstName: response.firstName,
+        lastName: response.lastName,
+      };
+    } catch (error: any) {
+      this.logger.error(`Error fetching owner ${ownerId}: ${error.message}`);
+      throw new Error(`Failed to fetch owner ${ownerId}: ${error.message}`);
+    }
+  }
+
+  /**
+   * Get the company associated with a deal
+   */
+  async getDealCompany(dealId: string): Promise<string | null> {
+    try {
+      // Fetch deal with company associations
+      const deal = await this.hubspotClient.crm.deals.basicApi.getById(
+        dealId,
+        undefined,
+        undefined,
+        ['companies']
+      );
+
+      const companyAssociations = deal.associations?.companies?.results;
+      if (companyAssociations && companyAssociations.length > 0) {
+        return companyAssociations[0].id;
+      }
+
+      this.logger.warn(`No company associated with deal ${dealId}`);
+      return null;
+    } catch (error: any) {
+      this.logger.error(`Error fetching deal company associations: ${error.message}`);
+      return null;
+    }
+  }
+
+  /**
+   * Get the owner associated with a deal
+   */
+  async getDealOwner(dealId: string): Promise<string | null> {
+    try {
+      // Owner is stored in the hubspot_owner_id property
+      const deal = await this.hubspotClient.crm.deals.basicApi.getById(
+        dealId,
+        ['hubspot_owner_id']
+      );
+
+      return deal.properties.hubspot_owner_id || null;
+    } catch (error: any) {
+      this.logger.error(`Error fetching deal owner: ${error.message}`);
+      return null;
+    }
+  }
+
+  /**
+   * Get all pipelines (useful for configuration discovery)
+   */
+  async getAllPipelines(): Promise<any[]> {
+    try {
+      const response = await this.hubspotClient.crm.pipelines.pipelinesApi.getAll('deals');
+      return response.results;
+    } catch (error: any) {
+      this.logger.error(`Error fetching pipelines: ${error.message}`);
+      throw error;
+    }
+  }
+
+  /**
+   * Get stage IDs for validation
+   */
+  getStageIds() {
+    return this.stageIds;
+  }
+
+  /**
+   * Get pipeline ID
+   */
+  getPipelineId() {
+    return this.pipelineId;
+  }
+}

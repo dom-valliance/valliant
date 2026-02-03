@@ -79,6 +79,38 @@ services:
   #   networks:
   #     - vrm-network
 
+  # hubspot-service:
+  #   build:
+  #     context: ../../
+  #     dockerfile: apps/hubspot-service/Dockerfile
+  #   container_name: vrm-hubspot-service
+  #   environment:
+  #     NODE_ENV: development
+  #     DATABASE_URL: postgresql://valliance:${POSTGRES_PASSWORD:-localdev}@postgres:5432/valliance_rm
+  #     REDIS_URL: redis://redis:6379
+  #     REDIS_HOST: redis
+  #     REDIS_PORT: 6379
+  #     HUBSPOT_API_KEY: ${HUBSPOT_API_KEY}
+  #     HUBSPOT_PIPELINE_ID: ${HUBSPOT_PIPELINE_ID}
+  #     HUBSPOT_STAGE_STAFFING_PLANNING: ${HUBSPOT_STAGE_STAFFING_PLANNING}
+  #     HUBSPOT_STAGE_DISCOVERY: ${HUBSPOT_STAGE_DISCOVERY}
+  #     HUBSPOT_STAGE_EXECUTION: ${HUBSPOT_STAGE_EXECUTION}
+  #     HUBSPOT_STAGE_ROLLOUT: ${HUBSPOT_STAGE_ROLLOUT}
+  #     HUBSPOT_STAGE_VALUE_REALISATION: ${HUBSPOT_STAGE_VALUE_REALISATION}
+  #     HUBSPOT_STAGE_CLOSED: ${HUBSPOT_STAGE_CLOSED}
+  #     HUBSPOT_SYNC_INTERVAL_MS: 1800000
+  #     HUBSPOT_SYNC_ENABLED: true
+  #     PORT: 4005
+  #   ports:
+  #     - "4005:4005"
+  #   depends_on:
+  #     postgres:
+  #       condition: service_healthy
+  #     redis:
+  #       condition: service_healthy
+  #   networks:
+  #     - vrm-network
+
   # ============== DEVELOPMENT TOOLS ==============
   adminer:
     image: adminer:latest
