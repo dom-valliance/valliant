@@ -2,6 +2,7 @@
   "name": "valliance-resource-management",
   "version": "1.0.0",
   "private": true,
+  "type": "module",
   "description": "Value-based resource management system for Valliance",
   "workspaces": [
     "apps/*",
@@ -15,11 +16,13 @@
     "lint": "turbo run lint",
     "format": "prettier --write \"**/*.{ts,tsx,js,jsx,json,md}\"",
     "clean": "turbo run clean && rm -rf node_modules",
+    "cleanup": "./scripts/cleanup-ports.sh",
     "db:migrate": "npx dotenv-cli -e .env -- yarn workspace @vrm/database prisma migrate dev",
     "db:push": "npx dotenv-cli -e .env -- yarn workspace @vrm/database prisma db push",
     "db:generate": "npx dotenv-cli -e .env -- yarn workspace @vrm/database prisma generate",
     "db:seed": "npx dotenv-cli -e .env -- yarn workspace @vrm/database prisma db seed",
     "db:studio": "npx dotenv-cli -e .env -- yarn workspace @vrm/database prisma studio",
+    "hubspot:reset-sync": "npx dotenv-cli -e .env -- tsx scripts/reset-hubspot-sync.ts",
     "docker:up": "docker-compose -f infrastructure/docker/docker-compose.yml up -d",
     "docker:down": "docker-compose -f infrastructure/docker/docker-compose.yml down",
     "docker:logs": "docker-compose -f infrastructure/docker/docker-compose.yml logs -f"
@@ -29,6 +32,7 @@
     "dotenv-cli": "^11.0.0",
     "prettier": "^3.2.4",
     "tsconfig-paths": "^4.2.0",
+    "tsx": "^4.21.0",
     "turbo": "^1.12.0",
     "typescript": "^5.3.3"
   },

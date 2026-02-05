@@ -29,7 +29,6 @@ import {
   TEAM_MODEL_OPTIONS,
   COMMERCIAL_MODEL_OPTIONS,
   PROJECT_COLORS,
-  DEFAULT_PROJECT_COLOR,
   getNextAvailableProjectColor,
 } from '@/lib/constants';
 import { useProjects } from '@/hooks/use-projects';

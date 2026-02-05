@@ -1,22 +1,25 @@
 {
-  "name": "@vrm/project-service",
+  "name": "@vrm/hubspot-service",
   "version": "1.0.0",
   "private": true,
   "scripts": {
     "build": "nest build",
-    "predev": "echo '🧹 [Project Service] Cleaning port 4002...' && ../../scripts/kill-port-robust.sh 4002",
-    "dev": "PORT=4002 nest start --watch",
+    "predev": "echo '🧹 [HubSpot Service] Cleaning port 4005 and building...' && ../../scripts/kill-port-robust.sh 4005 && nest build",
+    "dev": "PORT=4005 nest start --watch",
     "start": "nest start",
     "start:prod": "node dist/main",
     "clean": "rm -rf dist"
   },
   "dependencies": {
+    "@hubspot/api-client": "^11.2.0",
+    "@nestjs/bull": "^10.0.1",
     "@nestjs/common": "^10.3.0",
     "@nestjs/core": "^10.3.0",
     "@nestjs/platform-express": "^10.3.0",
     "@vrm/database": "*",
     "@vrm/events": "*",
     "@vrm/shared-types": "*",
+    "bull": "^4.12.2",
     "class-transformer": "^0.5.1",
     "class-validator": "^0.14.1",
     "dotenv": "^16.4.1",

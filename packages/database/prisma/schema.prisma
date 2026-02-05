@@ -178,11 +178,14 @@ model Client {
   primaryContact      String?
   contactEmail        String?
   notes               String?
+  hubspotCompanyId    String?           @unique // HubSpot company ID for matching
 
   projects            Project[]
 
   createdAt           DateTime          @default(now())
   updatedAt           DateTime          @updatedAt
+
+  @@index([hubspotCompanyId])
 }
 
 model Project {
@@ -222,6 +225,10 @@ model Project {
   // Display
   color               String            @default("#3B82F6") // Hex color code for schedule display
 
+  // HubSpot Integration
+  hubspotDealId       String?           @unique // HubSpot deal ID for matching
+  lastSyncedAt        DateTime?         // Last time synced from HubSpot
+
   // Relations
   phases              Phase[]
   allocations         Allocation[]
@@ -240,6 +247,7 @@ model Project {
   @@index([clientId])
   @@index([primaryPracticeId])
   @@index([valuePartnerId])
+  @@index([hubspotDealId])
 }
 
 model ProjectPractice {
@@ -572,4 +580,58 @@ model AuditLog {
   @@index([entityType, entityId])
   @@index([userId])
   @@index([createdAt])
+}
+
+// ============== HUBSPOT INTEGRATION ==============
+
+model HubSpotSyncLog {
+  id                  String            @id @default(uuid())
+  syncType            HubSpotSyncType
+  status              HubSpotSyncStatus
+
+  // HubSpot References
+  dealId              String?           // HubSpot deal ID
+  companyId           String?           // HubSpot company ID
+
+  // System References
+  projectId           String?           // Created/updated project
+  clientId            String?           // Created/updated client
+
+  // Metadata
+  dealData            Json?             // Snapshot of HubSpot deal data
+  errorMessage        String?           // Error details if failed
+  errorCode           String?           // Error type for categorization
+
+  // Audit
+  executedAt          DateTime          @default(now())
+  executedBy          String?           // User ID if manual trigger
+
+  @@index([syncType, status])
+  @@index([dealId])
+  @@index([executedAt])
+}
+
+enum HubSpotSyncType {
+  DEAL_IMPORT
+  DEAL_UPDATE
+  CLIENT_CREATE
+  MANUAL_IMPORT
+}
+
+enum HubSpotSyncStatus {
+  SUCCESS
+  FAILED
+  PARTIAL       // Client created but project failed, etc.
+}
+
+model HubSpotSyncState {
+  id                  String            @id @default(uuid())
+  lastSuccessfulSync  DateTime
+  dealsProcessed      Int               @default(0)
+  clientsCreated      Int               @default(0)
+  projectsCreated     Int               @default(0)
+  projectsUpdated     Int               @default(0)
+  failedImports       Int               @default(0)
+
+  updatedAt           DateTime          @updatedAt
 }

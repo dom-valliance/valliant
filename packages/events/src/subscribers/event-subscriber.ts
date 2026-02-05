@@ -1,5 +1,5 @@
-import Redis from 'ioredis';
-import { VRMEvent, EventType } from '../definitions/event-types';
+import { Redis } from 'ioredis';
+import { VRMEvent, EventType } from '../definitions/event-types.js';
 
 export type EventHandler = (event: VRMEvent) => Promise<void> | void;
 
@@ -13,16 +13,15 @@ export class EventSubscriber {
     this.setupSubscription();
   }
 
-  private setupSubscription(): void {
-    this.redis.subscribe(this.eventChannel, (err, count) => {
-      if (err) {
-        console.error('Failed to subscribe:', err);
-      } else {
-        console.log(`Subscribed to ${count} channel(s)`);
-      }
-    });
+  private async setupSubscription(): Promise<void> {
+    try {
+      await this.redis.subscribe(this.eventChannel);
+      console.log(`Subscribed to channel: ${this.eventChannel}`);
+    } catch (err) {
+      console.error('Failed to subscribe:', err);
+    }
 
-    this.redis.on('message', async (channel, message) => {
+    this.redis.on('message', async (channel: string, message: string) => {
       if (channel === this.eventChannel) {
         try {
           const event: VRMEvent = JSON.parse(message);

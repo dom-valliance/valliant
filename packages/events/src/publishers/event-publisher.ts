@@ -1,5 +1,5 @@
-import Redis from 'ioredis';
-import { VRMEvent } from '../definitions/event-types';
+import { Redis } from 'ioredis';
+import { VRMEvent } from '../definitions/event-types.js';
 
 export class EventPublisher {
   private redis: Redis;
