@@ -2,8 +2,6 @@
  * HubSpot Integration API Client
  */
 
-import { apiClient } from '../api-client';
-
 const HUBSPOT_SERVICE_URL = process.env.NEXT_PUBLIC_HUBSPOT_SERVICE_URL || 'http://localhost:4005';
 
 export interface SyncState {

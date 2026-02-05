@@ -8,8 +8,7 @@
     },
     "predev": {
       "dependsOn": ["^build"],
-      "cache": false,
-      "persistent": true
+      "cache": false
     },
     "dev": {
       "dependsOn": ["^build", "^predev"],

@@ -2,6 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { Client as HubSpotClient } from '@hubspot/api-client';
 import { FilterOperatorEnum } from '@hubspot/api-client/lib/codegen/crm/deals';
 import {
+  HubSpotProject,
   HubSpotDeal,
   HubSpotCompany,
   HubSpotOwner,
@@ -144,6 +145,94 @@ export class HubSpotApiService {
   }
 
   /**
+   * Fetch projects from HubSpot Projects API
+   * Projects are a better fit for Valliance than Deals
+   */
+  async fetchHubSpotProjects(lastSyncTime: Date): Promise<HubSpotProject[]> {
+    this.logger.log(
+      `Fetching HubSpot projects since ${lastSyncTime.toISOString()}`
+    );
+
+    try {
+      const allProjects: HubSpotProject[] = [];
+      let after: string | undefined;
+      let hasMore = true;
+
+      // Convert date to timestamp in milliseconds
+      const lastSyncTimestamp = lastSyncTime.getTime();
+
+      // Fetch all projects that have been modified since last sync
+      while (hasMore) {
+        const searchRequest: any = {
+          filterGroups: [
+            {
+              filters: [
+                {
+                  propertyName: 'hs_lastmodifieddate',
+                  operator: 'GTE',
+                  value: String(lastSyncTimestamp),
+                },
+              ],
+            },
+          ],
+          properties: [
+            'hs_name',
+            'hs_pipeline',
+            'hs_pipeline_stage',
+            'hs_description',
+            'hs_status',
+            'hs_type',
+            'hs_target_due_date',
+            'hubspot_owner_id',
+            'hs_createdate',
+            'hs_lastmodifieddate',
+            'hs_budget',
+            'hs_client',
+          ],
+          limit: 100,
+          sorts: ['hs_lastmodifieddate'],
+        };
+
+        // Only include 'after' when paginating
+        if (after) {
+          searchRequest.after = after;
+        }
+
+        // Use the generic objects API for projects
+        const response = await this.hubspotClient.apiRequest({
+          method: 'POST',
+          path: '/crm/v3/objects/projects/search',
+          body: searchRequest,
+        });
+
+        const data = await response.json();
+
+        // Transform results to our interface
+        const projects = data.results.map((result: any) => ({
+          id: result.id,
+          properties: result.properties,
+          associations: result.associations,
+        }));
+
+        allProjects.push(...projects);
+
+        // Check if there are more pages
+        if (data.paging?.next) {
+          after = data.paging.next.after;
+        } else {
+          hasMore = false;
+        }
+      }
+
+      this.logger.log(`Fetched ${allProjects.length} projects from HubSpot`);
+      return allProjects;
+    } catch (error: any) {
+      this.logger.error(`Error fetching projects from HubSpot: ${error.message}`, error.stack);
+      throw new Error(`Failed to fetch projects from HubSpot: ${error.message}`);
+    }
+  }
+
+  /**
    * Fetch company details by ID
    */
   async fetchCompany(companyId: string): Promise<HubSpotCompany> {
@@ -167,8 +256,9 @@ export class HubSpotApiService {
 
   /**
    * Fetch owner (user) details by ID
+   * Returns null if the app doesn't have the required scope (crm.objects.owners.read)
    */
-  async fetchOwner(ownerId: string): Promise<HubSpotOwner> {
+  async fetchOwner(ownerId: string): Promise<HubSpotOwner | null> {
     this.logger.debug(`Fetching owner ${ownerId}`);
 
     try {
@@ -177,7 +267,8 @@ export class HubSpotApiService {
       );
 
       if (!response.email) {
-        throw new Error(`Owner ${ownerId} has no email address`);
+        this.logger.warn(`Owner ${ownerId} has no email address`);
+        return null;
       }
 
       return {
@@ -187,8 +278,17 @@ export class HubSpotApiService {
         lastName: response.lastName,
       };
     } catch (error: any) {
+      // Check if it's a scope error
+      if (error.message?.includes('MISSING_SCOPES') || error.body?.category === 'MISSING_SCOPES') {
+        this.logger.warn(
+          `⚠️  Missing HubSpot scope 'crm.objects.owners.read'. Owner information will not be synced. ` +
+          `Please add this scope to your HubSpot app if you need owner information.`
+        );
+        return null;
+      }
+
       this.logger.error(`Error fetching owner ${ownerId}: ${error.message}`);
-      throw new Error(`Failed to fetch owner ${ownerId}: ${error.message}`);
+      return null;
     }
   }
 
@@ -237,6 +337,42 @@ export class HubSpotApiService {
   }
 
   /**
+   * Get the company associated with a HubSpot project
+   */
+  async getProjectCompany(projectId: string): Promise<string | null> {
+    try {
+      // Fetch project with company associations
+      const response = await this.hubspotClient.apiRequest({
+        method: 'GET',
+        path: `/crm/v3/objects/projects/${projectId}`,
+        qs: {
+          associations: 'companies',
+        },
+      });
+
+      const data = await response.json();
+      const companyAssociations = data.associations?.companies?.results;
+
+      if (companyAssociations && companyAssociations.length > 0) {
+        return companyAssociations[0].id;
+      }
+
+      this.logger.warn(`No company associated with project ${projectId}`);
+      return null;
+    } catch (error: any) {
+      this.logger.error(`Error fetching project company associations: ${error.message}`);
+      return null;
+    }
+  }
+
+  /**
+   * Get the owner associated with a HubSpot project
+   */
+  getProjectOwner(project: HubSpotProject): string | null {
+    return project.properties.hubspot_owner_id || null;
+  }
+
+  /**
    * Get all pipelines (useful for configuration discovery)
    */
   async getAllPipelines(): Promise<any[]> {
@@ -245,6 +381,24 @@ export class HubSpotApiService {
       return response.results;
     } catch (error: any) {
       this.logger.error(`Error fetching pipelines: ${error.message}`);
+      throw error;
+    }
+  }
+
+  /**
+   * Get all project pipelines
+   */
+  async getProjectPipelines(): Promise<any[]> {
+    try {
+      const response = await this.hubspotClient.apiRequest({
+        method: 'GET',
+        path: '/crm/v3/pipelines/projects',
+      });
+
+      const data = await response.json();
+      return data.results || [];
+    } catch (error: any) {
+      this.logger.error(`Error fetching project pipelines: ${error.message}`);
       throw error;
     }
   }

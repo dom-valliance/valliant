@@ -23,7 +23,7 @@ export class SyncController {
 
   /**
    * POST /sync/trigger
-   * Manually trigger a sync job
+   * Manually trigger a sync job (uses HubSpot Projects API)
    */
   @Post('trigger')
   async triggerSync() {
@@ -32,7 +32,7 @@ export class SyncController {
     try {
       // Add job to queue with high priority
       const job = await this.syncQueue.add(
-        'sync-deals',
+        'sync-projects',
         {},
         {
           priority: 1, // High priority for manual triggers
@@ -42,7 +42,7 @@ export class SyncController {
 
       return {
         success: true,
-        message: 'Sync triggered successfully',
+        message: 'Sync triggered successfully (HubSpot Projects)',
         jobId: job.id,
       };
     } catch (error: any) {
@@ -141,12 +141,12 @@ export class SyncController {
 
   /**
    * GET /sync/pipelines
-   * Discover available HubSpot pipelines and their stages
+   * Discover available HubSpot Deal pipelines and their stages
    * Use this to find the HUBSPOT_PIPELINE_ID and stage IDs to configure
    */
   @Get('pipelines')
   async getPipelines() {
-    this.logger.log('Fetching HubSpot pipelines for configuration discovery');
+    this.logger.log('Fetching HubSpot Deal pipelines for configuration discovery');
 
     try {
       const pipelines = await this.hubspotApi.getAllPipelines();
@@ -184,10 +184,59 @@ export class SyncController {
         availablePipelines: formattedPipelines,
       };
     } catch (error: any) {
-      this.logger.error(`Failed to fetch pipelines: ${error.message}`);
+      this.logger.error(`Failed to fetch Deal pipelines: ${error.message}`);
       return {
         error: error.message,
         hint: 'Make sure HUBSPOT_API_KEY is set correctly',
+      };
+    }
+  }
+
+  /**
+   * GET /sync/project-pipelines
+   * Discover available HubSpot Project pipelines and their stages
+   * Use this to find project pipeline configuration
+   */
+  @Get('project-pipelines')
+  async getProjectPipelines() {
+    this.logger.log('Fetching HubSpot Project pipelines for configuration discovery');
+
+    try {
+      const pipelines = await this.hubspotApi.getProjectPipelines();
+
+      // Format the output for easy copy-paste into .env
+      const formattedPipelines = pipelines.map((pipeline: any) => ({
+        id: pipeline.id,
+        label: pipeline.label,
+        displayOrder: pipeline.displayOrder,
+        stages: pipeline.stages?.map((stage: any) => ({
+          id: stage.id,
+          label: stage.label,
+          displayOrder: stage.displayOrder,
+        })),
+        envConfig: {
+          HUBSPOT_PROJECT_PIPELINE_ID: pipeline.id,
+          stages: pipeline.stages?.reduce((acc: any, stage: any) => {
+            // Create suggested env var names based on stage labels
+            const envKey = `HUBSPOT_PROJECT_STAGE_${stage.label
+              .toUpperCase()
+              .replace(/[^A-Z0-9]/g, '_')
+              .replace(/_+/g, '_')}`;
+            acc[envKey] = stage.id;
+            return acc;
+          }, {}),
+        },
+      }));
+
+      return {
+        message: 'HubSpot Project pipelines - use these IDs to configure your .env file',
+        availablePipelines: formattedPipelines,
+      };
+    } catch (error: any) {
+      this.logger.error(`Failed to fetch Project pipelines: ${error.message}`);
+      return {
+        error: error.message,
+        hint: 'Make sure HUBSPOT_API_KEY is set correctly and Projects API is enabled',
       };
     }
   }
@@ -218,9 +267,9 @@ export class SyncController {
         await this.syncQueue.removeRepeatableByKey(job.key);
       }
 
-      // Add new repeatable job
+      // Add new repeatable job (uses HubSpot Projects API)
       await this.syncQueue.add(
-        'sync-deals',
+        'sync-projects',
         {},
         {
           repeat: {
@@ -234,7 +283,7 @@ export class SyncController {
         }
       );
 
-      this.logger.log('Recurring sync scheduled successfully');
+      this.logger.log('Recurring sync scheduled successfully (HubSpot Projects)');
     } catch (error: any) {
       this.logger.error(`Failed to schedule recurring sync: ${error.message}`);
     }

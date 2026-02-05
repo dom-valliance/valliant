@@ -1,6 +1,6 @@
-export * from './definitions/event-types';
-export * from './publishers/event-publisher';
-export * from './subscribers/event-subscriber';
+export * from './definitions/event-types.js';
+export * from './publishers/event-publisher.js';
+export * from './subscribers/event-subscriber.js';
 
 // Queue names for BullMQ
 export enum QueueName {

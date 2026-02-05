@@ -18,15 +18,164 @@ export class SyncService {
   ) {}
 
   /**
-   * Main sync method - fetches and processes all deals from HubSpot
+   * Main sync method - fetches and processes all HubSpot Projects
+   * This is the recommended method for syncing HubSpot Projects (not Deals)
+   */
+  async syncProjects(): Promise<SyncResult> {
+    this.logger.log('Starting HubSpot projects sync...');
+
+    const result: SyncResult = {
+      dealsProcessed: 0, // Deprecated, kept for compatibility
+      hubspotProjectsProcessed: 0,
+      vallianceProjectsCreated: 0,
+      vallianceProjectsUpdated: 0,
+      clientsCreated: 0,
+      errors: [],
+    };
+
+    try {
+      // Get last sync time
+      const syncState = await this.getOrCreateSyncState();
+      const lastSync = syncState.lastSuccessfulSync;
+
+      this.logger.log(`Last successful sync: ${lastSync.toISOString()}`);
+
+      // Fetch projects from HubSpot
+      const projects = await this.hubspotApi.fetchHubSpotProjects(lastSync);
+
+      this.logger.log(`Processing ${projects.length} HubSpot projects...`);
+
+      // Process each project
+      for (const project of projects) {
+        try {
+          result.hubspotProjectsProcessed++;
+
+          // Validate project has required data
+          const validation = this.mapper.validateProject(project);
+          if (!validation.valid) {
+            throw new Error(`Invalid project data: ${validation.errors.join(', ')}`);
+          }
+
+          // Fetch company ID from project associations
+          const companyId = await this.hubspotApi.getProjectCompany(project.id);
+          if (!companyId) {
+            throw new Error('Project has no associated company');
+          }
+
+          // Fetch owner ID from project
+          const ownerId = this.hubspotApi.getProjectOwner(project);
+
+          // Fetch related data from HubSpot
+          // Note: owner may be null if the app doesn't have crm.objects.owners.read scope
+          const [company, owner] = await Promise.all([
+            this.hubspotApi.fetchCompany(companyId),
+            ownerId ? this.hubspotApi.fetchOwner(ownerId) : Promise.resolve(null),
+          ]);
+
+          // Check if project already exists (HubSpot project ID stored in hubspotDealId field)
+          const existingProject = await prisma.project.findUnique({
+            where: { hubspotDealId: project.id },
+          });
+
+          // Track clients before/after for counting new clients
+          const clientsBefore = await prisma.client.count();
+
+          if (existingProject) {
+            // Update existing project
+            await this.updateProjectFromHubSpotProject(project, company, owner, existingProject, result);
+          } else {
+            // Create new project
+            await this.createProjectFromHubSpotProject(project, company, owner, result);
+          }
+
+          // Check if new client was created
+          const clientsAfter = await prisma.client.count();
+          if (clientsAfter > clientsBefore) {
+            result.clientsCreated++;
+          }
+        } catch (error: any) {
+          // Log individual project failure but continue processing others
+          this.logger.error(
+            `Failed to process project ${project.id} (${project.properties.hs_name}): ${error.message}`
+          );
+
+          result.errors.push({
+            hubspotProjectId: project.id,
+            projectName: project.properties.hs_name,
+            error: error.message,
+          });
+
+          // Log to database
+          await this.logSync({
+            syncType: HubSpotSyncType.DEAL_IMPORT,
+            status: HubSpotSyncStatus.FAILED,
+            dealId: project.id,
+            dealData: project as any,
+            errorMessage: error.message,
+            errorCode: error.code || 'UNKNOWN',
+          });
+        }
+      }
+
+      // Update sync state
+      await this.updateSyncState({
+        lastSuccessfulSync: new Date(),
+        dealsProcessed: result.hubspotProjectsProcessed,
+        clientsCreated: result.clientsCreated,
+        projectsCreated: result.vallianceProjectsCreated,
+        projectsUpdated: result.vallianceProjectsUpdated,
+        failedImports: result.errors.length,
+      });
+
+      // Log the sync completion
+      await this.logSync({
+        syncType: HubSpotSyncType.MANUAL_IMPORT,
+        status: result.errors.length > 0 ? HubSpotSyncStatus.PARTIAL : HubSpotSyncStatus.SUCCESS,
+        dealData: {
+          dealsProcessed: result.dealsProcessed,
+          hubspotProjectsProcessed: result.hubspotProjectsProcessed,
+          vallianceProjectsCreated: result.vallianceProjectsCreated,
+          vallianceProjectsUpdated: result.vallianceProjectsUpdated,
+          clientsCreated: result.clientsCreated,
+          errors: result.errors.length,
+        } as any,
+        errorMessage: result.errors.length > 0
+          ? `${result.errors.length} project(s) failed to import`
+          : undefined,
+      });
+
+      this.logger.log(
+        `Sync completed: ${result.vallianceProjectsCreated} created, ${result.vallianceProjectsUpdated} updated, ${result.clientsCreated} clients created, ${result.errors.length} errors`
+      );
+
+      return result;
+    } catch (error: any) {
+      // Log complete sync failure
+      this.logger.error(`Sync failed: ${error.message}`, error.stack);
+
+      await this.logSync({
+        syncType: HubSpotSyncType.DEAL_IMPORT,
+        status: HubSpotSyncStatus.FAILED,
+        errorMessage: error.message,
+        errorCode: 'SYNC_FAILED',
+      });
+
+      throw error;
+    }
+  }
+
+  /**
+   * Legacy sync method - fetches and processes all deals from HubSpot
+   * @deprecated Use syncProjects() for HubSpot Projects
    */
   async syncDeals(): Promise<SyncResult> {
     this.logger.log('Starting HubSpot deal sync...');
 
     const result: SyncResult = {
       dealsProcessed: 0,
-      projectsCreated: 0,
-      projectsUpdated: 0,
+      hubspotProjectsProcessed: 0,
+      vallianceProjectsCreated: 0,
+      vallianceProjectsUpdated: 0,
       clientsCreated: 0,
       errors: [],
     };
@@ -62,14 +211,12 @@ export class SyncService {
 
           // Fetch owner ID from deal
           const ownerId = await this.hubspotApi.getDealOwner(deal.id);
-          if (!ownerId) {
-            throw new Error('Deal has no owner assigned');
-          }
 
           // Fetch related data from HubSpot
+          // Note: owner may be null if the app doesn't have crm.objects.owners.read scope
           const [company, owner] = await Promise.all([
             this.hubspotApi.fetchCompany(companyId),
-            this.hubspotApi.fetchOwner(ownerId),
+            ownerId ? this.hubspotApi.fetchOwner(ownerId) : Promise.resolve(null),
           ]);
 
           // Check if project already exists
@@ -100,9 +247,12 @@ export class SyncService {
           );
 
           result.errors.push({
+            hubspotProjectId: deal.id,
+            projectName: deal.properties.dealname,
+            error: error.message,
+            // Legacy fields for backward compatibility
             dealId: deal.id,
             dealName: deal.properties.dealname,
-            error: error.message,
           });
 
           // Log to database
@@ -122,8 +272,8 @@ export class SyncService {
         lastSuccessfulSync: new Date(),
         dealsProcessed: result.dealsProcessed,
         clientsCreated: result.clientsCreated,
-        projectsCreated: result.projectsCreated,
-        projectsUpdated: result.projectsUpdated,
+        projectsCreated: result.vallianceProjectsCreated,
+        projectsUpdated: result.vallianceProjectsUpdated,
         failedImports: result.errors.length,
       });
 
@@ -133,8 +283,9 @@ export class SyncService {
         status: result.errors.length > 0 ? HubSpotSyncStatus.PARTIAL : HubSpotSyncStatus.SUCCESS,
         dealData: {
           dealsProcessed: result.dealsProcessed,
-          projectsCreated: result.projectsCreated,
-          projectsUpdated: result.projectsUpdated,
+          hubspotProjectsProcessed: result.hubspotProjectsProcessed,
+          vallianceProjectsCreated: result.vallianceProjectsCreated,
+          vallianceProjectsUpdated: result.vallianceProjectsUpdated,
           clientsCreated: result.clientsCreated,
           errors: result.errors.length,
         } as any,
@@ -144,7 +295,7 @@ export class SyncService {
       });
 
       this.logger.log(
-        `Sync completed: ${result.projectsCreated} created, ${result.projectsUpdated} updated, ${result.clientsCreated} clients created, ${result.errors.length} errors`
+        `Sync completed: ${result.vallianceProjectsCreated} created, ${result.vallianceProjectsUpdated} updated, ${result.clientsCreated} clients created, ${result.errors.length} errors`
       );
 
       return result;
@@ -164,7 +315,48 @@ export class SyncService {
   }
 
   /**
+   * Create new project from HubSpot Project
+   */
+  private async createProjectFromHubSpotProject(
+    project: any,
+    company: any,
+    owner: any,
+    result: SyncResult
+  ) {
+    this.logger.log(`Creating project for HubSpot project ${project.id} (${project.properties.hs_name})`);
+
+    // Map HubSpot project to Valliance project data
+    const projectData = await this.mapper.mapProjectToProject(project, company, owner);
+
+    // Create project
+    const newProject = await prisma.project.create({
+      data: projectData,
+      include: {
+        client: true,
+        primaryPractice: true,
+        valuePartner: true,
+      },
+    });
+
+    result.vallianceProjectsCreated++;
+
+    // Log success
+    await this.logSync({
+      syncType: HubSpotSyncType.DEAL_IMPORT,
+      status: HubSpotSyncStatus.SUCCESS,
+      dealId: project.id,
+      companyId: company.id,
+      projectId: newProject.id,
+      clientId: newProject.clientId,
+      dealData: project as any,
+    });
+
+    this.logger.log(`Created project ${newProject.code} for HubSpot project ${project.id}`);
+  }
+
+  /**
    * Create new project from HubSpot deal
+   * @deprecated Use createProjectFromHubSpotProject for HubSpot Projects
    */
   private async createProject(
     deal: any,
@@ -187,7 +379,7 @@ export class SyncService {
       },
     });
 
-    result.projectsCreated++;
+    result.vallianceProjectsCreated++;
 
     // Log success
     await this.logSync({
@@ -204,7 +396,54 @@ export class SyncService {
   }
 
   /**
+   * Update existing project from HubSpot Project
+   */
+  private async updateProjectFromHubSpotProject(
+    project: any,
+    company: any,
+    owner: any,
+    existingProject: any,
+    result: SyncResult
+  ) {
+    this.logger.log(
+      `Updating project ${existingProject.code} for HubSpot project ${project.id} (${project.properties.hs_name})`
+    );
+
+    // Map HubSpot project to project data (with existing project context)
+    const projectData = await this.mapper.mapProjectToProject(
+      project,
+      company,
+      owner,
+      existingProject
+    );
+
+    // Update project (excluding fields that shouldn't change)
+    const { code, clientId, primaryPracticeId, valuePartnerId, ...updateData } =
+      projectData;
+
+    const updatedProject = await prisma.project.update({
+      where: { id: existingProject.id },
+      data: updateData,
+    });
+
+    result.vallianceProjectsUpdated++;
+
+    // Log success
+    await this.logSync({
+      syncType: HubSpotSyncType.DEAL_UPDATE,
+      status: HubSpotSyncStatus.SUCCESS,
+      dealId: project.id,
+      companyId: company.id,
+      projectId: updatedProject.id,
+      dealData: project as any,
+    });
+
+    this.logger.log(`Updated project ${updatedProject.code} for HubSpot project ${project.id}`);
+  }
+
+  /**
    * Update existing project from HubSpot deal
+   * @deprecated Use updateProjectFromHubSpotProject for HubSpot Projects
    */
   private async updateProject(
     deal: any,
@@ -234,7 +473,7 @@ export class SyncService {
       data: updateData,
     });
 
-    result.projectsUpdated++;
+    result.vallianceProjectsUpdated++;
 
     // Log success
     await this.logSync({

@@ -3,6 +3,7 @@
   "version": "1.0.0",
   "private": true,
   "scripts": {
+    "predev": "echo '🧹 [Web] Cleaning port 3000...' && ../../scripts/kill-port-robust.sh 3000",
     "dev": "next dev",
     "build": "next build",
     "start": "next start",

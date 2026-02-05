@@ -3,6 +3,12 @@ node_modules
 .pnp
 .pnp.js
 
+# Yarn
+.yarn/install-state.gz
+.yarn/cache
+.yarn/unplugged
+.yarn/build-state.yml
+
 # Testing
 coverage
 *.log

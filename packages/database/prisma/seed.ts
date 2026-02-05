@@ -379,279 +379,237 @@ async function main() {
 
   console.log('✓ Assigned practices');
   
-  // Create Clients
+  // Create Clients (Valliance only - external clients come from HubSpot)
   const valliance = await prisma.client.upsert({
     where: { name: 'Valliance Ltd' },
     update: {},
     create: {
       name: 'Valliance Ltd',
       industry: 'Technology',
-      notes: 'Internal company',
+      notes: 'Internal company - for internal projects and operations',
     },
   });
 
-  const heineken = await prisma.client.upsert({
-    where: { name: 'Heineken' },
-    update: {},
-    create: {
-      name: 'Heineken',
-      industry: 'Consumer Goods',
-      notes: 'Global brewing company',
-    },
-  });
+  console.log('✓ Created client');
 
-  const hbs = await prisma.client.upsert({
-    where: { name: 'HBS' },
-    update: {},
-    create: {
-      name: 'HBS',
-      industry: 'Medical',
-      notes: 'Healthcare Business Solutions',
-    },
-  });
-
-  const opella = await prisma.client.upsert({
-    where: { name: 'Opella' },
-    update: {},
-    create: {
-      name: 'Opella',
-      industry: 'Life Sciences',
-      notes: 'Healthcare and pharmaceuticals',
-    },
-  });
-
-  console.log('✓ Created clients');
-
-  // Define color palette for projects (visually distinct colors)
+  // Define color palette for internal projects
   const PROJECT_COLORS = {
     BLUE: '#3B82F6',
     PURPLE: '#8B5CF6',
     PINK: '#EC4899',
     GREEN: '#10B981',
     ORANGE: '#F59E0B',
-    RED: '#EF4444',
-    TEAL: '#14B8A6',
     INDIGO: '#6366F1',
-    LIME: '#84CC16',
+    TEAL: '#14B8A6',
     CYAN: '#06B6D4',
   };
 
-  // Create Projects
-  const vallianceProject = await prisma.project.upsert({
+  // Create Internal Projects (External client projects come from HubSpot)
+  const compassProject = await prisma.project.upsert({
     where: { code: 'VLL-2025-001' },
     update: {
+      name: 'Compass',
       commercialModel: CommercialModel.INTERNAL,
-      color: PROJECT_COLORS.INDIGO,
+      projectType: ProjectType.INTERNAL,
+      color: PROJECT_COLORS.BLUE,
     },
     create: {
-      name: 'Valliance Internal Project',
+      name: 'Compass',
       code: 'VLL-2025-001',
       clientId: valliance.id,
       primaryPracticeId: agenticPractice.id,
-      valuePartnerId: volha.id,
+      valuePartnerId: dom.id,
       status: ProjectStatus.ACTIVE,
       commercialModel: CommercialModel.INTERNAL,
-      agreedFeeCents: BigInt(0), // £0k
-      contingencyPct: 0.15,
+      agreedFeeCents: BigInt(0),
+      contingencyPct: 0,
       projectType: ProjectType.INTERNAL,
       teamModel: TeamModel.FLEXIBLE,
-      startDate: new Date('2025-01-06'),
-      color: PROJECT_COLORS.INDIGO,
+      startDate: new Date('2025-01-01'),
+      color: PROJECT_COLORS.BLUE,
+      notes: 'Internal resource management and scheduling system',
     },
   });
 
-  const vallianceWebsiteProject = await prisma.project.upsert({
+  const websiteProject = await prisma.project.upsert({
     where: { code: 'VLL-2025-002' },
     update: {
+      name: 'Website',
       commercialModel: CommercialModel.INTERNAL,
+      projectType: ProjectType.INTERNAL,
       color: PROJECT_COLORS.PURPLE,
     },
     create: {
-      name: 'Valliance Website Project',
+      name: 'Website',
       code: 'VLL-2025-002',
       clientId: valliance.id,
       primaryPracticeId: agenticPractice.id,
-      valuePartnerId: volha.id,
+      valuePartnerId: tarek.id,
       status: ProjectStatus.ACTIVE,
       commercialModel: CommercialModel.INTERNAL,
-      agreedFeeCents: BigInt(0), // £0k
-      contingencyPct: 0.15,
+      agreedFeeCents: BigInt(0),
+      contingencyPct: 0,
       projectType: ProjectType.INTERNAL,
       teamModel: TeamModel.FLEXIBLE,
-      startDate: new Date('2025-01-06'),
+      startDate: new Date('2025-01-01'),
       color: PROJECT_COLORS.PURPLE,
+      notes: 'Valliance website development and maintenance',
     },
   });
 
-  const heinekenProject = await prisma.project.upsert({
-    where: { code: 'HNK-2025-001' },
+  const itProject = await prisma.project.upsert({
+    where: { code: 'VLL-2025-003' },
     update: {
-      color: PROJECT_COLORS.GREEN,
+      name: 'IT',
+      commercialModel: CommercialModel.INTERNAL,
+      projectType: ProjectType.INTERNAL,
+      color: PROJECT_COLORS.TEAL,
     },
     create: {
-      name: 'Heineken Idea Triage App',
-      code: 'HNK-2025-001',
-      clientId: heineken.id,
-      primaryPracticeId: agenticPractice.id,
-      valuePartnerId: alec.id,
-      status: ProjectStatus.ACTIVE,
-      commercialModel: CommercialModel.FIXED_PRICE,
-      agreedFeeCents: BigInt(15000000), // £150k
-      contingencyPct: 0.15,
-      projectType: ProjectType.PILOT,
-      teamModel: TeamModel.FLEXIBLE,
-      startDate: new Date('2025-01-06'),
-      color: PROJECT_COLORS.GREEN,
-    },
-  });
-
-  const hbsProject = await prisma.project.upsert({
-    where: { code: 'HBS-2025-001' },
-    update: {
-      color: PROJECT_COLORS.ORANGE,
-    },
-    create: {
-      name: 'HBS Email Classification',
-      code: 'HBS-2025-001',
-      clientId: hbs.id,
+      name: 'IT',
+      code: 'VLL-2025-003',
+      clientId: valliance.id,
       primaryPracticeId: agenticPractice.id,
       valuePartnerId: dom.id,
       status: ProjectStatus.ACTIVE,
-      commercialModel: CommercialModel.FIXED_PRICE,
-      agreedFeeCents: BigInt(8000000), // £80k
-      contingencyPct: 0.10,
-      projectType: ProjectType.PILOT,
+      commercialModel: CommercialModel.INTERNAL,
+      agreedFeeCents: BigInt(0),
+      contingencyPct: 0,
+      projectType: ProjectType.INTERNAL,
       teamModel: TeamModel.FLEXIBLE,
-      startDate: new Date('2025-01-13'),
-      color: PROJECT_COLORS.ORANGE,
+      startDate: new Date('2025-01-01'),
+      color: PROJECT_COLORS.TEAL,
+      notes: 'IT infrastructure, systems, and technical operations',
     },
   });
 
-  const opellaProject = await prisma.project.upsert({
-    where: { code: 'OPL-2025-001' },
+  const hrProject = await prisma.project.upsert({
+    where: { code: 'VLL-2025-004' },
     update: {
-      color: PROJECT_COLORS.TEAL,
+      name: 'HR',
+      commercialModel: CommercialModel.INTERNAL,
+      projectType: ProjectType.INTERNAL,
+      color: PROJECT_COLORS.PINK,
     },
     create: {
-      name: 'Opella Palantir Bootcamp',
-      code: 'OPL-2025-001',
-      clientId: opella.id,
-      primaryPracticeId: palantirPractice.id,
-      valuePartnerId: rad.id,
+      name: 'HR',
+      code: 'VLL-2025-004',
+      clientId: valliance.id,
+      primaryPracticeId: agenticPractice.id,
+      valuePartnerId: anita.id,
       status: ProjectStatus.ACTIVE,
-      commercialModel: CommercialModel.FIXED_PRICE,
-      agreedFeeCents: BigInt(5000000), // £50k
-      contingencyPct: 0.20,
-      projectType: ProjectType.BOOTCAMP,
-      teamModel: TeamModel.THREE_IN_BOX,
-      startDate: new Date('2025-01-20'),
-      color: PROJECT_COLORS.TEAL,
+      commercialModel: CommercialModel.INTERNAL,
+      agreedFeeCents: BigInt(0),
+      contingencyPct: 0,
+      projectType: ProjectType.INTERNAL,
+      teamModel: TeamModel.FLEXIBLE,
+      startDate: new Date('2025-01-01'),
+      color: PROJECT_COLORS.PINK,
+      notes: 'Human resources, recruitment, and people operations',
     },
   });
 
-  console.log('✓ Created projects');
+  const vacationProject = await prisma.project.upsert({
+    where: { code: 'VLL-2025-005' },
+    update: {
+      name: 'Vacation',
+      commercialModel: CommercialModel.INTERNAL,
+      projectType: ProjectType.INTERNAL,
+      color: PROJECT_COLORS.GREEN,
+    },
+    create: {
+      name: 'Vacation',
+      code: 'VLL-2025-005',
+      clientId: valliance.id,
+      primaryPracticeId: agenticPractice.id,
+      valuePartnerId: anita.id,
+      status: ProjectStatus.ACTIVE,
+      commercialModel: CommercialModel.INTERNAL,
+      agreedFeeCents: BigInt(0),
+      contingencyPct: 0,
+      projectType: ProjectType.INTERNAL,
+      teamModel: TeamModel.FLEXIBLE,
+      startDate: new Date('2025-01-01'),
+      color: PROJECT_COLORS.GREEN,
+      notes: 'Annual leave and time off',
+    },
+  });
 
-  // Create Phases for each project
+  console.log('✓ Created internal projects');
+
+  // Create Phases for internal projects (simple operational phases)
+  // External project phases will be managed through HubSpot sync
   await prisma.phase.upsert({
-    where: { id: 'valliance-ops' },
+    where: { id: 'compass-ops' },
     update: {},
     create: {
-      id: 'valliance-ops',
-      projectId: vallianceProject.id,
+      id: 'compass-ops',
+      projectId: compassProject.id,
       name: 'Operations',
       phaseType: PhaseType.OPERATIONAL,
-      status: PhaseStatus.COMPLETED,
-      startDate: new Date('2025-01-06'),
-      endDate: new Date('2025-01-17'),
-      estimatedHours: 800,
-      estimatedCostCents: BigInt(4000000),
+      status: PhaseStatus.IN_PROGRESS,
+      startDate: new Date('2025-01-01'),
       sortOrder: 1,
     },
   });
 
   await prisma.phase.upsert({
-    where: { id: 'valliance-website' },
+    where: { id: 'website-ops' },
     update: {},
     create: {
-      id: 'valliance-website',
-      projectId: vallianceWebsiteProject.id,
-      name: 'Website Development',
+      id: 'website-ops',
+      projectId: websiteProject.id,
+      name: 'Operations',
       phaseType: PhaseType.OPERATIONAL,
-      status: PhaseStatus.COMPLETED,
-      startDate: new Date('2025-01-06'),
-      endDate: new Date('2025-12-17'),
-      estimatedHours: 800,
-      estimatedCostCents: BigInt(4000000),
-      sortOrder: 1,
-    },
-  });
-
-  await prisma.phase.upsert({
-    where: { id: 'heineken-discovery' },
-    update: {},
-    create: {
-      id: 'heineken-discovery',
-      projectId: heinekenProject.id,
-      name: 'Discovery',
-      phaseType: PhaseType.DISCOVERY,
-      status: PhaseStatus.COMPLETED,
-      startDate: new Date('2025-01-06'),
-      endDate: new Date('2025-01-17'),
-      estimatedHours: 80,
-      estimatedCostCents: BigInt(4000000),
-      sortOrder: 1,
-    },
-  });
-
-  await prisma.phase.upsert({
-    where: { id: 'heineken-build' },
-    update: {},
-    create: {
-      id: 'heineken-build',
-      projectId: heinekenProject.id,
-      name: 'Build',
-      phaseType: PhaseType.BUILD,
       status: PhaseStatus.IN_PROGRESS,
-      startDate: new Date('2025-01-20'),
-      estimatedHours: 200,
-      estimatedCostCents: BigInt(10000000),
-      sortOrder: 2,
+      startDate: new Date('2025-01-01'),
+      sortOrder: 1,
     },
   });
 
   await prisma.phase.upsert({
-    where: { id: 'hbs-discovery' },
+    where: { id: 'it-ops' },
     update: {},
     create: {
-      id: 'hbs-discovery',
-      projectId: hbsProject.id,
-      name: 'Discovery & Design',
-      phaseType: PhaseType.DISCOVERY,
+      id: 'it-ops',
+      projectId: itProject.id,
+      name: 'Operations',
+      phaseType: PhaseType.OPERATIONAL,
       status: PhaseStatus.IN_PROGRESS,
-      startDate: new Date('2025-01-13'),
-      estimatedHours: 60,
-      estimatedCostCents: BigInt(3000000),
+      startDate: new Date('2025-01-01'),
       sortOrder: 1,
     },
   });
 
   await prisma.phase.upsert({
-    where: { id: 'opella-bootcamp' },
+    where: { id: 'hr-ops' },
     update: {},
     create: {
-      id: 'opella-bootcamp',
-      projectId: opellaProject.id,
-      name: 'Bootcamp Workshop',
-      phaseType: PhaseType.DISCOVERY,
-      status: PhaseStatus.NOT_STARTED,
-      startDate: new Date('2025-01-20'),
-      estimatedHours: 40,
-      estimatedCostCents: BigInt(4000000),
+      id: 'hr-ops',
+      projectId: hrProject.id,
+      name: 'Operations',
+      phaseType: PhaseType.OPERATIONAL,
+      status: PhaseStatus.IN_PROGRESS,
+      startDate: new Date('2025-01-01'),
       sortOrder: 1,
     },
   });
 
-  console.log('✓ Created phases');
+  await prisma.phase.upsert({
+    where: { id: 'vacation-ops' },
+    update: {},
+    create: {
+      id: 'vacation-ops',
+      projectId: vacationProject.id,
+      name: 'Leave',
+      phaseType: PhaseType.OPERATIONAL,
+      status: PhaseStatus.IN_PROGRESS,
+      startDate: new Date('2025-01-01'),
+      sortOrder: 1,
+    },
+  });
+
+  console.log('✓ Created phases for internal projects');
 
   // Create Admin User for Dom
   const passwordHash = await bcrypt.hash('valliance2025', SALT_ROUNDS);

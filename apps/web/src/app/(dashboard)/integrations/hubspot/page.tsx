@@ -8,7 +8,6 @@ import {
   XCircle,
   Clock,
   TrendingUp,
-  Users,
   Building2,
   FileText,
   AlertCircle,

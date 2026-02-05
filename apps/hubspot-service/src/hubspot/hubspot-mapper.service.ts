@@ -1,6 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { prisma, CommercialModel, ProjectStatus, ProjectType, TeamModel } from '@vrm/database';
-import { HubSpotDeal, HubSpotCompany, HubSpotOwner } from './hubspot.types';
+import { HubSpotProject, HubSpotDeal, HubSpotCompany, HubSpotOwner } from './hubspot.types';
 
 /**
  * HubSpot Mapper Service
@@ -14,21 +14,143 @@ export class HubSpotMapperService {
   private readonly VALUE_SHARE_THRESHOLD_CENTS = 10000000;
 
   /**
+   * Map HubSpot Project to Valliance Project
+   * This is the preferred method for syncing projects
+   */
+  async mapProjectToProject(
+    hubspotProject: HubSpotProject,
+    company: HubSpotCompany,
+    owner: HubSpotOwner | null,
+    existingProject?: any
+  ): Promise<any> {
+    this.logger.log(`Mapping HubSpot project ${hubspotProject.id} (${hubspotProject.properties.hs_name})`);
+
+    // 1. Map Project Owner email → Person (or use default if owner not available)
+    let valuePartner;
+
+    if (owner?.email) {
+      valuePartner = await this.findPersonByEmail(owner.email);
+      if (!valuePartner) {
+        this.logger.warn(
+          `No Person found with email ${owner.email}. Using default value partner.`
+        );
+        valuePartner = await this.getDefaultValuePartner();
+      }
+    } else {
+      this.logger.warn(
+        `No owner information available for project ${hubspotProject.id}. Using default value partner.`
+      );
+      valuePartner = await this.getDefaultValuePartner();
+    }
+
+    if (!valuePartner) {
+      throw new Error(
+        `No default value partner found. Please ensure at least one person with PARTNER seniority exists in the system.`
+      );
+    }
+
+    // 2. Get Person's primary practice
+    const primaryPractice = await this.getPrimaryPractice(valuePartner.id);
+    if (!primaryPractice) {
+      throw new Error(
+        `Person ${valuePartner.name} (${valuePartner.email}) has no primary practice assigned. Please assign a primary practice before syncing their projects.`
+      );
+    }
+
+    // 3. Parse budget if available
+    const budgetCents = this.parseAmount(hubspotProject.properties.hs_budget || '0');
+    const commercialModel =
+      budgetCents >= this.VALUE_SHARE_THRESHOLD_CENTS
+        ? CommercialModel.VALUE_SHARE
+        : budgetCents > 0
+        ? CommercialModel.FIXED_PRICE
+        : CommercialModel.INTERNAL;
+
+    this.logger.debug(
+      `Project budget: £${(budgetCents / 100).toFixed(2)} → ${commercialModel}`
+    );
+
+    // 4. Find or create Client
+    const client = await this.findOrCreateClient(company);
+
+    // 5. Generate project code if new
+    const code = existingProject?.code || (await this.generateProjectCode(client.name));
+
+    // 6. Map project stage to project status
+    const status = this.mapProjectStageToStatus(hubspotProject.properties.hs_pipeline_stage);
+
+    // 7. Map project type
+    const projectType = this.mapProjectType(hubspotProject.properties.hs_type);
+
+    // 8. Parse dates
+    const startDate = hubspotProject.properties.hs_createdate
+      ? new Date(hubspotProject.properties.hs_createdate)
+      : new Date();
+
+    const endDate = hubspotProject.properties.hs_target_due_date
+      ? new Date(hubspotProject.properties.hs_target_due_date)
+      : undefined;
+
+    // 9. Build the DTO
+    const projectData = {
+      name: hubspotProject.properties.hs_name,
+      code,
+      clientId: client.id,
+      primaryPracticeId: primaryPractice.id,
+      valuePartnerId: valuePartner.id,
+      commercialModel,
+      projectType,
+      startDate,
+      endDate,
+      agreedFeeCents: budgetCents > 0 ? BigInt(budgetCents) : undefined,
+      status,
+      teamModel: TeamModel.THREE_IN_BOX, // Default
+      contingencyPct: 0.2, // 20% default
+      currency: 'GBP',
+      notes: existingProject
+        ? existingProject.notes
+        : `Imported from HubSpot project ${hubspotProject.id} on ${new Date().toISOString()}\n\nDescription: ${hubspotProject.properties.hs_description || 'N/A'}`,
+      // HubSpot tracking fields
+      hubspotDealId: hubspotProject.id, // Store project ID in the hubspotDealId field for now
+      lastSyncedAt: new Date(),
+    };
+
+    return projectData;
+  }
+
+  /**
    * Map HubSpot deal to CreateProjectDto or UpdateProjectDto
+   * @deprecated Use mapProjectToProject instead for HubSpot Projects
    */
   async mapDealToProject(
     deal: HubSpotDeal,
     company: HubSpotCompany,
-    owner: HubSpotOwner,
+    owner: HubSpotOwner | null,
     existingProject?: any
   ): Promise<any> {
     this.logger.log(`Mapping deal ${deal.id} (${deal.properties.dealname})`);
 
-    // 1. Map Deal Owner email → Person
-    const valuePartner = await this.findPersonByEmail(owner.email);
+    // 1. Map Deal Owner email → Person (or use default if owner not available)
+    let valuePartner;
+
+    if (owner?.email) {
+      valuePartner = await this.findPersonByEmail(owner.email);
+      if (!valuePartner) {
+        this.logger.warn(
+          `No Person found with email ${owner.email}. Using default value partner.`
+        );
+        valuePartner = await this.getDefaultValuePartner();
+      }
+    } else {
+      this.logger.warn(
+        `No owner information available for deal ${deal.id}. Using default value partner.`
+      );
+      valuePartner = await this.getDefaultValuePartner();
+    }
+
     if (!valuePartner) {
       throw new Error(
-        `No Person found with email ${owner.email}. Please add this person to the system before syncing deals they own.`
+        `No default value partner found. Please ensure at least one person with PARTNER seniority exists in the system.`
       );
     }
 
@@ -99,6 +221,25 @@ export class HubSpotMapperService {
       where: { email: email.toLowerCase() },
       include: {
         role: true,
+      },
+    });
+  }
+
+  /**
+   * Get default value partner (fallback when owner info is not available)
+   * Returns the first active person with PARTNER seniority
+   */
+  private async getDefaultValuePartner() {
+    return prisma.person.findFirst({
+      where: {
+        status: 'ACTIVE',
+        seniority: 'PARTNER',
+      },
+      include: {
+        role: true,
+      },
+      orderBy: {
+        createdAt: 'asc', // Use the oldest/first partner as default
       },
     });
   }
@@ -268,7 +409,68 @@ export class HubSpotMapperService {
   }
 
   /**
+   * Map HubSpot project stage to ProjectStatus
+   */
+  private mapProjectStageToStatus(stageId: string): ProjectStatus {
+    // For now, use a simple mapping
+    // You can customize this based on your actual HubSpot project stages
+    const stageMap: Record<string, ProjectStatus> = {
+      // Use env vars if available
+      [process.env.HUBSPOT_PROJECT_STAGE_PROSPECT || '']: ProjectStatus.PROSPECT,
+      [process.env.HUBSPOT_PROJECT_STAGE_DISCOVERY || '']: ProjectStatus.DISCOVERY,
+      [process.env.HUBSPOT_PROJECT_STAGE_ACTIVE || '']: ProjectStatus.ACTIVE,
+      [process.env.HUBSPOT_PROJECT_STAGE_COMPLETED || '']: ProjectStatus.COMPLETED,
+      [process.env.HUBSPOT_PROJECT_STAGE_CANCELLED || '']: ProjectStatus.CANCELLED,
+    };
+
+    return stageMap[stageId] || ProjectStatus.PROSPECT;
+  }
+
+  /**
+   * Map HubSpot project type to Valliance ProjectType
+   */
+  private mapProjectType(hsType?: string): ProjectType {
+    if (!hsType) {
+      return ProjectType.PILOT; // Default
+    }
+
+    const typeMap: Record<string, ProjectType> = {
+      sales: ProjectType.PILOT,
+      marketing: ProjectType.BOOTCAMP,
+      service: ProjectType.USE_CASE_ROLLOUT,
+      internal_ops: ProjectType.INTERNAL,
+    };
+
+    return typeMap[hsType.toLowerCase()] || ProjectType.PILOT;
+  }
+
+  /**
+   * Validate that a HubSpot project has all required data for import
+   */
+  validateProject(project: HubSpotProject): { valid: boolean; errors: string[] } {
+    const errors: string[] = [];
+
+    if (!project.properties.hs_name) {
+      errors.push('Project name is missing');
+    }
+
+    if (!project.properties.hs_pipeline) {
+      errors.push('Project pipeline is missing');
+    }
+
+    if (!project.properties.hs_pipeline_stage) {
+      errors.push('Project pipeline stage is missing');
+    }
+
+    return {
+      valid: errors.length === 0,
+      errors,
+    };
+  }
+
+  /**
    * Validate that a deal has all required data for import
+   * @deprecated Use validateProject for HubSpot Projects
    */
   validateDeal(deal: HubSpotDeal): { valid: boolean; errors: string[] } {
     const errors: string[] = [];

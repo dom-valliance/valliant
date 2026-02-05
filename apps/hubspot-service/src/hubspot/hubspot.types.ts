@@ -2,6 +2,29 @@
  * HubSpot Integration Type Definitions
  */
 
+export interface HubSpotProject {
+  id: string;
+  properties: {
+    hs_name: string;
+    hs_pipeline: string;
+    hs_pipeline_stage: string;
+    hs_description?: string;
+    hs_status?: string;
+    hs_type?: 'sales' | 'marketing' | 'service' | 'internal_ops';
+    hs_target_due_date?: string;
+    hubspot_owner_id?: string;
+    hs_createdate?: string;
+    hs_lastmodifieddate?: string;
+    // Custom properties that might be mapped to Valliance fields
+    hs_budget?: string;
+    hs_client?: string;
+  };
+  associations?: {
+    companies?: { results: Array<{ id: string }> };
+    contacts?: { results: Array<{ id: string }> };
+  };
+}
+
 export interface HubSpotDeal {
   id: string;
   properties: {
@@ -65,15 +88,19 @@ export interface HubSpotSearchResponse<T> {
 }
 
 export interface SyncResult {
-  dealsProcessed: number;
-  projectsCreated: number;
-  projectsUpdated: number;
+  dealsProcessed: number; // Deprecated - kept for backward compatibility
+  hubspotProjectsProcessed: number;
+  vallianceProjectsCreated: number;
+  vallianceProjectsUpdated: number;
   clientsCreated: number;
   errors: SyncError[];
 }
 
 export interface SyncError {
-  dealId: string;
-  dealName: string;
+  hubspotProjectId: string;
+  projectName: string;
   error: string;
+  // Legacy fields for backward compatibility
+  dealId?: string;
+  dealName?: string;
 }

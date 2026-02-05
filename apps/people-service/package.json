@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "build": "nest build",
-    "predev": "npx --yes kill-port 4001",
+    "predev": "echo '🧹 [People Service] Cleaning port 4001...' && ../../scripts/kill-port-robust.sh 4001",
     "dev": "PORT=4001 nest start --watch",
     "start": "nest start",
     "start:prod": "node dist/main",
